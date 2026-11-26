@@ -1,0 +1,19 @@
+name: Scaffold checks
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Required documentation
+        run: |
+          test -s SPEC.md
+          test -s AGENTS.md
+          test -s LICENSE
+          test -s ROADMAP.md
+          test -s docs/release-gates.md
+          for d in apps/{hub,engine,desktop,extension} packages/{sdk-js,sdk-php,protocol} providers/birdid; do
+            test -s "$d/AGENTS.md" || exit 1
+          done

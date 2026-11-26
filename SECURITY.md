@@ -1,0 +1,2 @@
+# Security
+Pre-alpha; no supported production releases. Do not use real sensitive documents. Report vulnerabilities through GitHub private vulnerability reporting once enabled; until then contact the maintainer privately (contact pending). Do not disclose secrets or patient data in reports. Include affected version, reproduction with synthetic data and impact. Security response SLA not yet defined.

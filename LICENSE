@@ -1,0 +1,11 @@
+# License index — planned component licensing
+This monorepo is intended to use multiple licenses; there is no single blanket license. Formal grant and copyright ownership must be confirmed before public distribution. Full reference texts in LICENSES/ do not by themselves grant rights to third-party material.
+
+- apps/hub, apps/engine, providers/birdid: AGPL-3.0-or-later
+- apps/desktop, apps/extension: GPL-3.0-or-later
+- packages/sdk-js, packages/sdk-php, packages/protocol: Apache-2.0
+- docs prose and diagrams: CC-BY-4.0
+- infrastructure and core build scripts: AGPL-3.0-or-later (proposed)
+- root documents, shared tests and fixtures: classify before publication; third-party terms remain applicable.
+
+See SPEC.md §22–24 and docs/release-gates.md. Do not claim this scaffold is ready for public licensing until ownership and notices are confirmed.
