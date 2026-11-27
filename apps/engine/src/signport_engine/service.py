@@ -174,31 +174,46 @@ class PreparationService:
         self._clock = clock or SystemClock()
         self._faults = faults or NoFaults()
         self._owner_prefix = f"{socket.gethostname()}:{os.getpid()}"
-        self._registry_at_start = frozenset(repository.registered_keys())
+        with lock.shared():  # the generation this process was started against (REV-17)
+            if not repository.verify_key_registry(keyring):
+                raise EngineError(
+                    ErrorCode.SERVICE_UNAVAILABLE, "Key registry changed during startup; retry."
+                )
+            self._generation = repository.registry_state().generation
 
     # ------------------------------------------------------------------ helpers
+    def _require_current(self) -> None:
+        """REV-16/REV-17: refuse a process whose keyring predates a registry change made elsewhere
+        (new key, active key change, retirement). Detected by the authenticated generation and
+        active key, independently of the set of key ids. Called with the maintenance lock held, so
+        the registry cannot change until the operation ends. In-memory nonce blocks are dropped."""
+        try:
+            state = self._repo.registry_state()
+        except ConfigurationError:  # catalog authenticated by a key this process does not have
+            state = None
+        if (
+            state is None
+            or state.generation != self._generation
+            or state.active_key_id != self._keyring.active_key_id
+        ):
+            self._cipher.discard_reserved()
+            raise EngineError(
+                ErrorCode.SERVICE_UNAVAILABLE,
+                "Engine keyring is outdated (key registry changed); restart with the current keyring.",
+            )
+
     @contextlib.contextmanager
     def _shared(self) -> Generator[None]:
-        """Shared maintenance lock plus a keyring freshness check, held for the whole operation.
-
-        Rotation, retirement and restore recovery take the lock exclusively, so the registry
-        cannot change while an operation runs. A long-lived process whose in-memory keyring
-        (and nonce blocks) predate a retirement or a rotation done elsewhere must not keep
-        sealing or authenticating with it: it is refused until restarted with the new keyring.
-        """
+        """Normal operations: shared maintenance lock plus the freshness check, for the whole call."""
         with self._lock.shared():
-            registry = self._repo.registered_keys()
-            if registry.get(self._keyring.active_key_id, None) is not None:
-                raise EngineError(
-                    ErrorCode.SERVICE_UNAVAILABLE, "Engine keyring is outdated (active key retired); restart."
-                )
-            # Keys registered by another process after this one started (a rotation in progress).
-            unknown = set(registry) - self._keyring.key_ids - self._registry_at_start
-            if unknown:
-                raise EngineError(
-                    ErrorCode.SERVICE_UNAVAILABLE,
-                    "Engine keyring is outdated (new keys registered); restart.",
-                )
+            self._require_current()
+            yield
+
+    @contextlib.contextmanager
+    def _exclusive(self) -> Generator[None]:
+        """Maintenance (rewrap, retirement, restore recovery): exclusive lock plus the same check."""
+        with self._lock.exclusive():
+            self._require_current()
             yield
 
     def _owner(self) -> str:
@@ -275,7 +290,7 @@ class PreparationService:
             signature_algorithm=signature_algorithm,
             max_pdf_bytes=self._s.max_pdf_bytes,
         )
-        with self._shared(), _guard():
+        with _guard(), self._shared():
             pid = uuid7()
             pdf_ref = f"prepared/{pid}.bin"
             self._repo.register_intent(pdf_ref, now=now)  # protects the file before it exists (REV-07)
@@ -335,7 +350,7 @@ class PreparationService:
         binding = completion_binding(
             preparation_id, attempt_id, certificate_sha256, digest_algorithm, signature_algorithm, signature
         )
-        with self._shared(), _guard():
+        with _guard(), self._shared():
             return await self._complete(
                 preparation_id,
                 attempt_id,
@@ -383,14 +398,12 @@ class PreparationService:
         owner = self._owner()
         wait_until = time.monotonic() + self._s.completion_wait_seconds
         while True:
-            now = self._clock.now()
             outcome = self._repo.claim_completion(
                 pid,
                 binding=binding,
                 attempt_id=attempt_id,
                 owner=owner,
-                now=now,
-                lease_until=now + dt.timedelta(seconds=self._s.lease_seconds),
+                lease=dt.timedelta(seconds=self._s.lease_seconds),
                 deadline=record.expires_at + self._grace(),
             )
             if outcome.kind in (ClaimKind.CLAIMED, ClaimKind.TAKEN_OVER):
@@ -439,7 +452,11 @@ class PreparationService:
         )
         try:
             done = self._repo.mark_completed(
-                pid, token=token, binding=binding, artifact=artifact, now=self._clock.now()
+                pid,
+                token=token,
+                binding=binding,
+                artifact=artifact,
+                deadline=record.expires_at + self._grace(),
             )
         except EngineError as exc:
             if exc.code is not ErrorCode.CONFLICT:
@@ -467,14 +484,14 @@ class PreparationService:
 
     def read_artifact(self, preparation_id: str) -> bytes:
         """Decrypt the stored signed PDF (for delivery to the Hub in E9)."""
-        with self._shared(), _guard():
+        with _guard(), self._shared():
             record = self._repo.get(preparation_id)
             if record.status is not PreparationStatus.COMPLETED:
                 raise EngineError(ErrorCode.CONFLICT, "Preparation is not completed.")
             return self._existing(record)[1]
 
     def cancel(self, preparation_id: str) -> PreparationRecord:
-        with self._shared(), _guard():
+        with _guard(), self._shared():
             return self._repo.cancel(preparation_id, now=self._clock.now())
 
     # ------------------------------------------------------------------ recovery (REV-05/06/08/09)
@@ -510,13 +527,13 @@ class PreparationService:
     async def recover_stale(self, *, limit: int = 100) -> list[str]:
         """Finish completions whose process died after publishing a verifiable artifact."""
         recovered: list[str] = []
-        with self._shared(), _guard():
-            now = self._clock.now()
-            for pid in self._repo.stale_completing(now=now, limit=limit):
+        with _guard(), self._shared():
+            for pid in self._repo.stale_completing(now=self._clock.now(), limit=limit):
                 record = self._repo.get(pid)
                 if record.completion_binding is None or record.completion_attempt_id is None:
                     continue
-                lease = now + dt.timedelta(seconds=self._s.lease_seconds)
+                now = self._clock.now()  # per row: never a timestamp from before earlier slow work
+                lease = dt.timedelta(seconds=self._s.lease_seconds)
                 deadline = record.expires_at + self._grace()
                 candidates = [b for b in self._blobs.all_blobs() if b.startswith(f"artifacts/{pid}/")]
                 if now >= deadline or len(candidates) != 1:
@@ -526,8 +543,7 @@ class PreparationService:
                             binding=record.completion_binding,
                             attempt_id=record.completion_attempt_id,
                             owner=self._owner(),
-                            now=now,
-                            lease_until=lease,
+                            lease=lease,
                             deadline=deadline,
                         )
                     continue
@@ -542,8 +558,7 @@ class PreparationService:
                     binding=record.completion_binding,
                     attempt_id=record.completion_attempt_id,
                     owner=self._owner(),
-                    now=now,
-                    lease_until=lease,
+                    lease=lease,
                     deadline=deadline,
                 )
                 if claim.kind is ClaimKind.TAKEN_OVER:
@@ -553,7 +568,7 @@ class PreparationService:
                         token=claim.token,
                         binding=record.completion_binding,
                         artifact=ArtifactInfo(ref, sha, len(signed), self._blobs.key_id(ref)),
-                        now=now,
+                        deadline=deadline,
                     )
                     recovered.append(pid)
         return recovered
@@ -565,7 +580,7 @@ class PreparationService:
         References are always removed in a transaction BEFORE the file; orphan files are only
         deleted under the write lock after re-checking every reference and intent.
         """
-        with self._shared(), _guard():
+        with _guard(), self._shared():
             now = self._clock.now()
             stats = {
                 "expired": len(self._repo.expire_due(now=now, limit=limit)),
@@ -622,7 +637,7 @@ class PreparationService:
 
     def rewrap(self, *, batch: int = 100) -> int:
         """Re-seal everything sealed with a non-active key; resumable, idempotent, exclusive."""
-        with self._lock.exclusive(), _guard():
+        with _guard(), self._exclusive():
             active, done = self._keyring.active_key_id, 0
             for _ in range(_MAX_REWRAP_ROUNDS):
                 ids = self._repo.rewrap_candidates(active_key_id=active, limit=batch)
@@ -667,17 +682,18 @@ class PreparationService:
 
     def retire_key(self, key_id: str) -> None:
         """Retire a key only when nothing (DB or filesystem) still depends on it. History is kept."""
-        with self._lock.exclusive(), _guard():
+        with _guard(), self._exclusive():
             if key_id == self._keyring.active_key_id:
                 raise ConfigurationError("the active key cannot be retired")
             if key_id in self.key_ids_in_use():
                 raise ConfigurationError("key is still in use; run rewrap first")
             self._repo.retire_key(key_id, now=self._clock.now())
+            self._generation = self._repo.registry_state().generation  # this process stays current
 
     def recover_after_restore(self) -> list[str]:
         """Mandatory after restoring a backup: counters may have rewound, so the active key must be
         one never used before; every non-terminal preparation is invalidated (Hub reconciliation)."""
-        with self._lock.exclusive(), _guard():
+        with _guard(), self._exclusive():
             active = self._keyring.active_key_id
             if active in self._repo.nonce_key_ids() or active in self.key_ids_in_use():
                 raise ConfigurationError("restore recovery requires rotating to a never-used state key first")
@@ -699,10 +715,14 @@ def open_engine(
         instance_id=settings.instance_id,
         keyring=keyring,
         busy_timeout_ms=settings.busy_timeout_ms,
+        clock=clock,
     )
     lock = MaintenanceLock(settings.data_dir, timeout_seconds=settings.lock_timeout_seconds)
-    with lock.shared():  # never races rotation, retirement or restore recovery
-        repo.sync_key_registry(keyring, now=(clock or SystemClock()).now())
+    with lock.shared():  # read-only verification (REV-17)
+        current = repo.verify_key_registry(keyring)
+    if not current:  # registering keys or changing the active key needs effective exclusion
+        with lock.exclusive():
+            repo.sync_key_registry(keyring, now=(clock or SystemClock()).now())
     cipher = EnvelopeCipher(keyring, repo)
     blobs = EncryptedBlobStore(settings.data_dir, cipher)
     return PreparationService(settings, repo, cipher, blobs, keyring, lock, clock=clock, faults=faults)

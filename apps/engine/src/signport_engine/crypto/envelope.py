@@ -144,6 +144,11 @@ class EnvelopeCipher:
             block[0] += 1
             return counter
 
+    def discard_reserved(self) -> None:
+        """Forget reserved in-memory counters (never handed out again; the gap is harmless)."""
+        with self._lock:
+            self._blocks = {}
+
     @property
     def active_key_id(self) -> str:
         return self._keyring.active_key_id

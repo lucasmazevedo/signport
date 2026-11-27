@@ -32,7 +32,7 @@ from collections.abc import Callable, Generator
 from pathlib import Path
 from typing import Any
 
-from signport_engine.clock import from_rfc3339, to_rfc3339
+from signport_engine.clock import Clock, SystemClock, from_rfc3339, to_rfc3339
 from signport_engine.crypto.envelope import NonceReservation
 from signport_engine.crypto.keys import Keyring, Purpose
 from signport_engine.errors import ConfigurationError, EngineError, ErrorCode, StateIntegrityError
@@ -44,6 +44,7 @@ from signport_engine.persistence.repository import (
     FencingToken,
     PreparationRecord,
     PreparationStatus,
+    RegistryState,
 )
 
 _GENESIS = bytes(32)
@@ -132,6 +133,7 @@ _TIME_FIELDS = {
     "terminal_at",
 }
 _PREP_SELECT = "SELECT * FROM preparations WHERE preparation_id = ?"
+_ENVELOPE_PURPOSES = (Purpose.STATE, Purpose.ARTIFACT)
 
 
 def ensure_local_filesystem(path: Path, mountinfo: Path = Path("/proc/self/mountinfo")) -> None:
@@ -195,7 +197,13 @@ def _canonical(values: dict[str, Any]) -> bytes:
 
 class SqlitePreparationRepository(NonceReservation):
     def __init__(
-        self, db_path: Path, *, instance_id: str, keyring: Keyring, busy_timeout_ms: int = 5000
+        self,
+        db_path: Path,
+        *,
+        instance_id: str,
+        keyring: Keyring,
+        busy_timeout_ms: int = 5000,
+        clock: Clock | None = None,
     ) -> None:
         if busy_timeout_ms < 0:
             raise ConfigurationError("busy_timeout must be >= 0")
@@ -206,6 +214,7 @@ class SqlitePreparationRepository(NonceReservation):
         self._busy_timeout_ms = busy_timeout_ms
         self._keyring = keyring
         self._macs = _Macs(keyring)
+        self._clock = clock or SystemClock()
         ensure_local_filesystem(db_path.parent)
         self._initialize()
 
@@ -308,53 +317,157 @@ class SqlitePreparationRepository(NonceReservation):
         finally:
             conn.close()
 
-    # ------------------------------------------------------------------ key registry (REV-02)
+    # ------------------------------------------------------------------ key registry (REV-02, REV-15, REV-17)
     def _registry_mac(self, key_id: str, fingerprint: str, first_seen: str, retired: str | None) -> bytes:
         data = _canonical(
             {"i": self._instance_id, "k": key_id, "f": fingerprint, "s": first_seen, "r": retired}
         )
         return self._macs.tag(key_id, b"key-registry\x00", data)
 
-    def sync_key_registry(self, keyring: Keyring, *, now: dt.datetime) -> None:
-        """Startup check: register new keys, refuse re-bound ids, historic reuse and missing keys."""
-        with self._tx() as conn, _db_errors():
-            rows = {r["key_id"]: r for r in conn.execute("SELECT * FROM key_registry")}
-            by_fp = {r["fingerprint"]: r["key_id"] for r in rows.values()}
-            for kid in sorted(keyring.key_ids):
-                fp = keyring.fingerprint(kid)
-                row = rows.get(kid)
-                if row is None:
-                    if fp in by_fp:
-                        raise ConfigurationError(
-                            "key material was previously registered under another key id"
-                        )
-                    first = to_rfc3339(now)
-                    conn.execute(
-                        "INSERT INTO key_registry VALUES (?, ?, ?, NULL, ?)",
-                        (kid, fp, first, self._registry_mac(kid, fp, first, None)),
-                    )
-                    continue
-                if row["fingerprint"] != fp:
-                    raise ConfigurationError("key id is registered with different key material")
-                expected = self._registry_mac(kid, fp, row["first_seen_at"], row["retired_at"])
-                if not hmac.compare_digest(expected, row["mac"]):
-                    raise StateIntegrityError("key registry entry failed authentication")
-            active = rows.get(keyring.active_key_id)
-            if active is not None and active["retired_at"] is not None:
-                raise ConfigurationError("the active key id was retired and cannot be used again")
+    @staticmethod
+    def _registry_contents(conn: sqlite3.Connection) -> tuple[list[list[Any]], list[list[str]]]:
+        entries = [
+            [r["key_id"], r["fingerprint"], r["first_seen_at"], r["retired_at"]]
+            for r in conn.execute("SELECT * FROM key_registry ORDER BY key_id")
+        ]
+        counters = [
+            [r[0], r[1]] for r in conn.execute("SELECT key_id, purpose FROM nonce_counters ORDER BY 1, 2")
+        ]
+        return entries, counters
+
+    def _write_catalog(self, conn: sqlite3.Connection, generation: int, active_key_id: str) -> None:
+        """REV-15: one catalog of the WHOLE key history (retired keys included), authenticated by the
+        active key's metadata subkey and re-authenticated on every registry change. It lists every
+        registry entry and every nonce counter row, so removing or altering one in isolation is
+        detected even after the retired key's material left the keyring. A coordinated rollback of
+        the catalog together with the rows it lists is NOT detected (accepted risk, REV-04)."""
+        entries, counters = self._registry_contents(conn)
+        doc = {
+            "v": 1,
+            "i": self._instance_id,
+            "g": generation,
+            "a": active_key_id,
+            "k": active_key_id,
+            "e": entries,
+            "c": counters,
+        }
+        mac = self._macs.tag(active_key_id, b"key-catalog\x00", _canonical(doc))
+        conn.execute(
+            "INSERT INTO engine_meta VALUES ('key_catalog', ?) "
+            "ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+            (json.dumps({"doc": doc, "mac": mac.hex()}, sort_keys=True),),
+        )
+
+    def _verify_catalog(self, conn: sqlite3.Connection) -> dict[str, Any] | None:
+        """The verified catalog, or None for a brand-new data directory (never for lost history)."""
+        row = conn.execute("SELECT value FROM engine_meta WHERE key = 'key_catalog'").fetchone()
+        if row is None:
+            used = any(
+                conn.execute(f"SELECT 1 FROM {table} LIMIT 1").fetchone()  # noqa: S608 - fixed names
+                for table in ("key_registry", "nonce_counters", "preparations")
+            )
+            if used:
+                raise StateIntegrityError("key catalog is missing")
+            return None
+        try:
+            stored = json.loads(row[0])
+            doc, mac = stored["doc"], bytes.fromhex(stored["mac"])
+            mac_key = doc["k"]
+        except (ValueError, KeyError, TypeError):
+            raise StateIntegrityError("key catalog is malformed") from None
+        if not isinstance(mac_key, str) or not self._keyring.has(mac_key):
+            raise ConfigurationError("the key registry is authenticated by a key missing from the keyring")
+        self._macs.verify(mac_key, b"key-catalog\x00", _canonical(doc), mac)
+        entries, counters = self._registry_contents(conn)
+        if doc.get("i") != self._instance_id or doc.get("e") != entries or doc.get("c") != counters:
+            raise StateIntegrityError("key registry does not match its authenticated catalog")
+        return dict(doc)
+
+    def _check_keyring(self, conn: sqlite3.Connection, keyring: Keyring) -> bool:
+        """Validate the keyring against the verified registry. True when no change is needed."""
+        rows = {r["key_id"]: r for r in conn.execute("SELECT * FROM key_registry")}
+        by_fp = {r["fingerprint"]: r["key_id"] for r in rows.values()}
+        current = True
+        for kid in sorted(keyring.key_ids):
+            fp = keyring.fingerprint(kid)
+            row = rows.get(kid)
+            if row is None:
+                if fp in by_fp:
+                    raise ConfigurationError("key material was previously registered under another key id")
+                current = False
+                continue
+            if row["fingerprint"] != fp:
+                raise ConfigurationError("key id is registered with different key material")
+            expected = self._registry_mac(kid, fp, row["first_seen_at"], row["retired_at"])
+            if not hmac.compare_digest(expected, row["mac"]):
+                raise StateIntegrityError("key registry entry failed authentication")
+        active = rows.get(keyring.active_key_id)
+        if active is not None and active["retired_at"] is not None:
+            raise ConfigurationError("the active key id was retired and cannot be used again")
+        # Identity errors above are reported first (clearer diagnostics); every path fails closed.
+        doc = self._verify_catalog(conn)
+        return current and doc is not None and doc["a"] == keyring.active_key_id
+
+    def verify_key_registry(self, keyring: Keyring) -> bool:
+        """Read-only startup check (REV-17); True when the registry already matches the keyring."""
+        with self._read() as conn, _db_errors():
+            current = self._check_keyring(conn, keyring)
         missing = self.key_ids_referenced() - keyring.key_ids
         if missing:
             raise ConfigurationError(
                 "persisted data is sealed or authenticated with keys missing from the keyring"
             )
+        return current
+
+    def sync_key_registry(self, keyring: Keyring, *, now: dt.datetime) -> None:
+        """Register new keys (with their nonce counters, REV-18) and the active key, bumping the
+        authenticated generation. Callers hold the EXCLUSIVE maintenance lock (REV-17)."""
+        with self._tx() as conn, _db_errors():
+            if self._check_keyring(conn, keyring):
+                return
+            doc = self._verify_catalog(conn)
+            registered = {r[0] for r in conn.execute("SELECT key_id FROM key_registry")}
+            first = to_rfc3339(now)
+            for kid in sorted(keyring.key_ids - registered):
+                fp = keyring.fingerprint(kid)
+                conn.execute(
+                    "INSERT INTO key_registry VALUES (?, ?, ?, NULL, ?)",
+                    (kid, fp, first, self._registry_mac(kid, fp, first, None)),
+                )
+                for purpose in _ENVELOPE_PURPOSES:
+                    conn.execute(
+                        "INSERT INTO nonce_counters VALUES (?, ?, 0, ?)",
+                        (kid, purpose.value, self._counter_mac(kid, fp, purpose.value, 0)),
+                    )
+            self._write_catalog(conn, (doc["g"] if doc else 0) + 1, keyring.active_key_id)
+        if not self.verify_key_registry(keyring):
+            raise StateIntegrityError("key registry did not converge")
+
+    def registry_state(self) -> RegistryState:
+        """The verified registry (REV-15): generation, active key and the full key history."""
+        with self._read() as conn, _db_errors():
+            doc = self._verify_catalog(conn)
+        if doc is None:
+            raise StateIntegrityError("key registry was never initialized")
+        return RegistryState(
+            generation=int(doc["g"]),
+            active_key_id=str(doc["a"]),
+            keys={e[0]: (from_rfc3339(e[3]) if e[3] else None) for e in doc["e"]},
+        )
 
     def retire_key(self, key_id: str, *, now: dt.datetime) -> None:
+        """Callers hold the exclusive maintenance lock. History is kept; the generation is bumped."""
         with self._tx() as conn, _db_errors():
+            doc = self._verify_catalog(conn)
+            if doc is None:
+                raise StateIntegrityError("key registry was never initialized")
             row = conn.execute("SELECT * FROM key_registry WHERE key_id = ?", (key_id,)).fetchone()
             if row is None:
                 raise ConfigurationError("unknown key id")
             if row["retired_at"] is not None:
                 return
+            if key_id == doc["a"]:
+                raise ConfigurationError("the active key cannot be retired")
             retired = to_rfc3339(now)
             conn.execute(
                 "UPDATE key_registry SET retired_at = ?, mac = ? WHERE key_id = ?",
@@ -364,10 +477,10 @@ class SqlitePreparationRepository(NonceReservation):
                     key_id,
                 ),
             )
+            self._write_catalog(conn, int(doc["g"]) + 1, str(doc["a"]))
 
     def registered_keys(self) -> dict[str, dt.datetime | None]:
-        rows = self._rows("SELECT key_id, retired_at FROM key_registry", ())
-        return {r[0]: (from_rfc3339(r[1]) if r[1] else None) for r in rows}
+        return dict(self.registry_state().keys)
 
     # ------------------------------------------------------------------ nonce reservation (REV-02)
     def _counter_mac(self, key_id: str, fingerprint: str, purpose: str, value: int) -> bytes:
@@ -389,39 +502,40 @@ class SqlitePreparationRepository(NonceReservation):
                 "SELECT next_counter, mac FROM nonce_counters WHERE key_id = ? AND purpose = ?",
                 (key_id, purpose.value),
             ).fetchone()
-            current = 0
-            if row is not None:
-                current = int(row["next_counter"])
-                self._macs.verify(
-                    key_id,
-                    b"nonce-counter\x00",
-                    _canonical(
-                        {
-                            "i": self._instance_id,
-                            "k": key_id,
-                            "f": reg["fingerprint"],
-                            "p": purpose.value,
-                            "n": current,
-                        }
-                    ),
-                    row["mac"],
-                )
+            if row is None:  # created with the key (REV-18): absence means loss or tampering
+                raise StateIntegrityError("nonce counter is missing")
+            current = int(row["next_counter"])
+            self._macs.verify(
+                key_id,
+                b"nonce-counter\x00",
+                _canonical(
+                    {
+                        "i": self._instance_id,
+                        "k": key_id,
+                        "f": reg["fingerprint"],
+                        "p": purpose.value,
+                        "n": current,
+                    }
+                ),
+                row["mac"],
+            )
             nxt = current + size
             conn.execute(
-                "INSERT INTO nonce_counters VALUES (?, ?, ?, ?) "
-                "ON CONFLICT (key_id, purpose) DO UPDATE "
-                "SET next_counter = excluded.next_counter, mac = excluded.mac",
+                "UPDATE nonce_counters SET next_counter = ?, mac = ? WHERE key_id = ? AND purpose = ?",
                 (
-                    key_id,
-                    purpose.value,
                     nxt,
                     self._counter_mac(key_id, reg["fingerprint"], purpose.value, nxt),
+                    key_id,
+                    purpose.value,
                 ),
             )
         return current
 
     def nonce_key_ids(self) -> set[str]:
-        return {r[0] for r in self._rows("SELECT DISTINCT key_id FROM nonce_counters", ())}
+        """Keys that ever reserved a nonce block (counter rows exist from registration at 0)."""
+        return {
+            r[0] for r in self._rows("SELECT DISTINCT key_id FROM nonce_counters WHERE next_counter > 0", ())
+        }
 
     def key_ids_referenced(self) -> set[str]:
         ids: set[str] = set()
@@ -648,11 +762,18 @@ class SqlitePreparationRepository(NonceReservation):
         binding: str,
         attempt_id: str,
         owner: str,
-        now: dt.datetime,
-        lease_until: dt.datetime,
         deadline: dt.datetime,
+        lease: dt.timedelta | None = None,
+        lease_until: dt.datetime | None = None,
+        now: dt.datetime | None = None,
     ) -> ClaimOutcome:
+        """``now`` defaults to the clock read AFTER the write lock is acquired (REV-19), so a long
+        wait for the lock never yields a stale timestamp. The lease never outlives ``deadline``."""
+        if (lease is None) == (lease_until is None):
+            raise ValueError("pass exactly one of lease / lease_until")
         with self._tx() as conn, _db_errors():
+            now = now or self._clock.now()
+            lease_until = min(lease_until or now + (lease or dt.timedelta()), deadline)
             rec, prev = self._load(conn, preparation_id)
             if rec.status is PreparationStatus.PREPARED:
                 if now >= rec.expires_at:  # first signature after expiry is always rejected (REV-09)
@@ -708,14 +829,22 @@ class SqlitePreparationRepository(NonceReservation):
                 return ClaimOutcome(ClaimKind.TAKEN_OVER, new)
             return ClaimOutcome(ClaimKind.CONFLICT, rec)
 
-    def _require_fence(self, rec: PreparationRecord, token: FencingToken, now: dt.datetime) -> None:
-        """REV-06: only the live lease holder at the exact claimed version may commit."""
+    def _require_fence(
+        self,
+        rec: PreparationRecord,
+        token: FencingToken,
+        now: dt.datetime,
+        deadline: dt.datetime | None = None,
+    ) -> None:
+        """REV-06: only the live lease holder at the exact claimed version may commit.
+        REV-19: and never at or after the completion deadline, whatever the lease says."""
         valid = (
             rec.status is PreparationStatus.COMPLETING
             and rec.lease_owner == token.owner
             and rec.state_version == token.state_version
             and rec.lease_expires_at is not None
             and now < rec.lease_expires_at
+            and (deadline is None or now < deadline)
         )
         if not valid:
             raise EngineError(ErrorCode.CONFLICT, "Completion lease is no longer held by this request.")
@@ -727,13 +856,15 @@ class SqlitePreparationRepository(NonceReservation):
         token: FencingToken,
         binding: str,
         artifact: ArtifactInfo,
-        now: dt.datetime,
+        deadline: dt.datetime,
+        now: dt.datetime | None = None,
     ) -> PreparationRecord:
         with self._tx() as conn, _db_errors():
+            now = now or self._clock.now()  # read after the write lock is held (REV-19)
             rec, prev = self._load(conn, preparation_id)
             if rec.completion_binding != binding:
                 raise EngineError(ErrorCode.CONFLICT, "Preparation is bound to a different completion.")
-            self._require_fence(rec, token, now)
+            self._require_fence(rec, token, now, deadline)
             return self._transition(
                 conn,
                 rec,

@@ -9,7 +9,7 @@ implementation in P1 is SQLite (``persistence.sqlite``); PostgreSQL is a future 
 """
 
 import datetime as dt
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Protocol
@@ -71,6 +71,15 @@ class PreparationRecord:
     failure_reason: str | None = None  # internal reason code, never client data
 
 
+@dataclass(frozen=True)
+class RegistryState:
+    """Verified key registry (REV-15/REV-17): authenticated generation, active key, full history."""
+
+    generation: int
+    active_key_id: str
+    keys: Mapping[str, dt.datetime | None]
+
+
 @dataclass(frozen=True, slots=True)
 class FencingToken:
     """Proof of the current claim: only (owner, state_version) of the live lease may commit."""
@@ -111,7 +120,9 @@ class ArtifactInfo:
 
 class PreparationRepository(NonceReservation, Protocol):
     # keys
+    def verify_key_registry(self, keyring: Keyring) -> bool: ...
     def sync_key_registry(self, keyring: Keyring, *, now: dt.datetime) -> None: ...
+    def registry_state(self) -> RegistryState: ...
     def retire_key(self, key_id: str, *, now: dt.datetime) -> None: ...
     def registered_keys(self) -> dict[str, dt.datetime | None]: ...
     def nonce_key_ids(self) -> set[str]: ...
@@ -127,9 +138,10 @@ class PreparationRepository(NonceReservation, Protocol):
         binding: str,
         attempt_id: str,
         owner: str,
-        now: dt.datetime,
-        lease_until: dt.datetime,
         deadline: dt.datetime,
+        lease: dt.timedelta | None = None,
+        lease_until: dt.datetime | None = None,
+        now: dt.datetime | None = None,
     ) -> ClaimOutcome: ...
     def mark_completed(
         self,
@@ -138,7 +150,8 @@ class PreparationRepository(NonceReservation, Protocol):
         token: FencingToken,
         binding: str,
         artifact: ArtifactInfo,
-        now: dt.datetime,
+        deadline: dt.datetime,
+        now: dt.datetime | None = None,
     ) -> PreparationRecord: ...
     def mark_failed(
         self, preparation_id: str, *, token: FencingToken, reason: str, now: dt.datetime
