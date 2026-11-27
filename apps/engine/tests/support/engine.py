@@ -84,7 +84,7 @@ def keyring(env: Mapping[str, str]) -> Keyring:
     return load_keyring(env, Path(env["ENGINE_DATA_DIR"]), env["ENGINE_INSTANCE_ID"])
 
 
-def repository(env: Mapping[str, str]) -> SqlitePreparationRepository:
+def repository(env: Mapping[str, str], clock: FakeClock | None = None) -> SqlitePreparationRepository:
     """Open the same repository the service uses (operator/test view), via public API only."""
     settings = EngineSettings.from_env(env)
     return SqlitePreparationRepository(
@@ -92,6 +92,7 @@ def repository(env: Mapping[str, str]) -> SqlitePreparationRepository:
         instance_id=settings.instance_id,
         keyring=keyring(env),
         busy_timeout_ms=settings.busy_timeout_ms,
+        clock=clock,
     )
 
 

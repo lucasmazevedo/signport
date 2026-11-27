@@ -399,7 +399,12 @@ def test_rev06_stale_token_and_expired_lease_cannot_commit(tmp_path: Path, pki: 
     art = ArtifactInfo("artifacts/x/y.bin", "0" * 64, 1, "k1")
     with pytest.raises(EngineError):  # lease expired, no takeover yet: the old owner may NOT commit
         repo.mark_completed(
-            pid, token=first.token, binding="b", artifact=art, now=now + dt.timedelta(seconds=11)
+            pid,
+            token=first.token,
+            binding="b",
+            artifact=art,
+            deadline=far,
+            now=now + dt.timedelta(seconds=11),
         )
     later = now + dt.timedelta(seconds=11)
     second = repo.claim_completion(
@@ -414,9 +419,11 @@ def test_rev06_stale_token_and_expired_lease_cannot_commit(tmp_path: Path, pki: 
     assert second.kind is ClaimKind.TAKEN_OVER
     for token in (first.token, FencingToken("B", first.token.state_version)):  # old owner / stale version
         with pytest.raises(EngineError):
-            repo.mark_completed(pid, token=token, binding="b", artifact=art, now=later)
+            repo.mark_completed(pid, token=token, binding="b", artifact=art, deadline=far, now=later)
     assert (
-        repo.mark_completed(pid, token=second.token, binding="b", artifact=art, now=later).status
+        repo.mark_completed(
+            pid, token=second.token, binding="b", artifact=art, deadline=far, now=later
+        ).status
         is PreparationStatus.COMPLETED
     )
 
@@ -709,27 +716,53 @@ def test_rev10_processes_with_an_outdated_keyring_stop_sealing(
     tmp_path: Path, pki: LabPki, pdf: bytes
 ) -> None:
     """A long-lived process keeps its keyring and reserved nonce blocks in memory. Once another
-    process registers a new key or retires the old one, the stale process must not seal or
-    authenticate anything until it is restarted with the new keyring."""
+    process changes the registry, the stale process must not seal, authenticate or run
+    maintenance until it is restarted with the new keyring (REV-16)."""
     k1, k2 = new_key(), new_key()
     old = service(base_env(tmp_path, ENGINE_STATE_KEY_FILE=keyfile(tmp_path / "a.json", "k1", {"k1": k1})))
     prepare(old, pki, pdf)  # warms an in-memory nonce block for k1
     rotated = service(
         base_env(tmp_path, ENGINE_STATE_KEY_FILE=keyfile(tmp_path / "b.json", "k2", {"k1": k1, "k2": k2}))
     )
-    for action in (lambda: prepare(old, pki, pdf), old.cleanup):
-        with pytest.raises(EngineError, match="new keys registered") as err:
+    stale: list[Callable[[], object]] = [
+        lambda: prepare(old, pki, pdf),
+        old.cleanup,
+        old.rewrap,
+        lambda: old.retire_key("k2"),
+        old.recover_after_restore,
+    ]
+    for action in stale:
+        with pytest.raises(EngineError, match="keyring is outdated") as err:
             action()
         assert err.value.code is ErrorCode.SERVICE_UNAVAILABLE
     assert rotated.rewrap() == 1
     rotated.retire_key("k1")
-    with pytest.raises(EngineError, match="active key retired"):
-        prepare(old, pki, pdf)
+    prepare(rotated, pki, pdf)  # the process that retired the key stays current
+    for action in stale:
+        with pytest.raises(EngineError, match="keyring is outdated"):
+            action()
     # A restarted process holding only the retired key is refused at startup.
     with pytest.raises(ConfigurationError):
         service(base_env(tmp_path, ENGINE_STATE_KEY_FILE=keyfile(tmp_path / "c.json", "k1", {"k1": k1})))
     assert rotated.key_ids_in_use() == {"k2"}
-    prepare(rotated, pki, pdf)
+
+
+def test_rev16_same_keyring_processes_must_restart_after_maintenance(
+    tmp_path: Path, pki: LabPki, pdf: bytes
+) -> None:
+    """Detection uses the authenticated generation, not the set of key ids: a peer with the very
+    same keyring is refused after another process retires a key, including for maintenance."""
+    k1, k2 = new_key(), new_key()
+    env = base_env(tmp_path, ENGINE_STATE_KEY_FILE=keyfile(tmp_path / "a.json", "k1", {"k1": k1}))
+    prepare(service(env), pki, pdf)
+    env2 = base_env(tmp_path, ENGINE_STATE_KEY_FILE=keyfile(tmp_path / "b.json", "k2", {"k1": k1, "k2": k2}))
+    admin, peer = service(env2), service(env2)
+    assert admin.rewrap() == 1
+    admin.retire_key("k1")
+    for action in (lambda: prepare(peer, pki, pdf), peer.rewrap, peer.recover_after_restore):
+        with pytest.raises(EngineError, match="keyring is outdated"):
+            action()
+    prepare(service(env2), pki, pdf)  # restarted: current again
 
 
 # ---------------------------------------------------------------------------------- REV-12
@@ -1011,3 +1044,237 @@ def test_rev07_create_refuses_to_reference_a_blob_whose_intent_was_reclaimed(
     assert err.value.code is ErrorCode.SERVICE_UNAVAILABLE
     with pytest.raises(EngineError):
         repo.get(pid)  # nothing was created
+
+
+# ---------------------------------------------------------------------------------- REV-15
+
+
+def _retired_history(tmp_path: Path, pki: LabPki, pdf: bytes) -> tuple[str, str]:
+    """k1 used, rotated to k2, rewrapped and retired; returns the k2-only keyring file and k2."""
+    k1, k2 = new_key(), new_key()
+    old = service(base_env(tmp_path, ENGINE_STATE_KEY_FILE=keyfile(tmp_path / "a.json", "k1", {"k1": k1})))
+    prepare(old, pki, pdf)
+    rotated = service(
+        base_env(tmp_path, ENGINE_STATE_KEY_FILE=keyfile(tmp_path / "b.json", "k2", {"k1": k1, "k2": k2}))
+    )
+    assert rotated.rewrap() == 1
+    rotated.retire_key("k1")
+    return keyfile(tmp_path / "c.json", "k2", {"k2": k2}), k2
+
+
+def test_rev15_history_stays_authenticated_after_the_old_material_is_gone(
+    tmp_path: Path, pki: LabPki, pdf: bytes
+) -> None:
+    only_new, _ = _retired_history(tmp_path, pki, pdf)
+    env = base_env(tmp_path, ENGINE_STATE_KEY_FILE=only_new)
+    svc = service(env)  # k1's material is no longer configured, yet its history verifies
+    state = repository(env).registry_state()
+    assert set(state.keys) == {"k1", "k2"}
+    assert state.keys["k1"] is not None
+    assert state.keys["k2"] is None
+    assert state.active_key_id == "k2"
+    prepare(svc, pki, pdf)
+
+
+@pytest.mark.parametrize(
+    "tamper",
+    [
+        "UPDATE key_registry SET retired_at = NULL WHERE key_id = 'k1'",
+        "UPDATE key_registry SET first_seen_at = '2000-01-01T00:00:00Z' WHERE key_id = 'k1'",
+        "DELETE FROM nonce_counters WHERE key_id = 'k1' AND purpose = 'state'",
+        "DELETE FROM key_registry WHERE key_id = 'k1'",
+        "INSERT INTO key_registry VALUES ('k7', 'f7', '2026-01-01T00:00:00Z', NULL, x'00')",
+        "UPDATE engine_meta SET value = replace(value, '\"g\": 3', '\"g\": 4') WHERE key = 'key_catalog'",
+        "DELETE FROM engine_meta WHERE key = 'key_catalog'",
+    ],
+)
+def test_rev15_isolated_tampering_with_retired_history_fails_closed(
+    tmp_path: Path, pki: LabPki, pdf: bytes, tamper: str
+) -> None:
+    only_new, _ = _retired_history(tmp_path, pki, pdf)
+    env = base_env(tmp_path, ENGINE_STATE_KEY_FILE=only_new)
+    svc = service(env)
+    with raw_db(env) as conn:
+        conn.execute("PRAGMA foreign_keys = OFF")
+        assert conn.execute(tamper).rowcount == 1
+    with pytest.raises(StateIntegrityError):
+        service(env)  # a restarted process refuses to start
+    with pytest.raises(EngineError) as err:  # a running one refuses to operate
+        prepare(svc, pki, pdf)
+    assert err.value.code in (ErrorCode.INTERNAL_ERROR, ErrorCode.SERVICE_UNAVAILABLE)
+
+
+def test_rev15_catalog_generation_in_the_initial_state(tmp_path: Path) -> None:
+    env = engine_env(tmp_path / "engine")
+    service(env)
+    state = repository(env).registry_state()
+    assert (state.generation, state.active_key_id, dict(state.keys)) == (1, "k1", {"k1": None})
+
+
+# ---------------------------------------------------------------------------------- REV-17
+
+
+def test_rev17_registry_cannot_change_during_a_protected_operation(
+    tmp_path: Path, pki: LabPki, pdf: bytes
+) -> None:
+    k1, k2 = new_key(), new_key()
+    env = base_env(
+        tmp_path,
+        ENGINE_COMPLETION_LEASE_SECONDS="60",
+        ENGINE_STATE_KEY_FILE=keyfile(tmp_path / "a.json", "k1", {"k1": k1}),
+    )
+    view = prepare(service(env), pki, pdf)
+    sig, pid = sign_view(pki.signer, view), view.record.preparation_id
+    reached, resume, q = CTX.Event(), CTX.Event(), CTX.Queue()
+    p = CTX.Process(
+        target=workers.stall_worker,
+        args=(env, pid, ATTEMPT_ID, sig, view.record.certificate_sha256, "after_claim", reached, resume, q),
+    )
+    p.start()
+    rotate = base_env(
+        tmp_path,
+        ENGINE_LOCK_TIMEOUT_MS="300",
+        ENGINE_STATE_KEY_FILE=keyfile(tmp_path / "b.json", "k2", {"k1": k1, "k2": k2}),
+    )
+    try:
+        assert reached.wait(120)  # the child holds the shared lock in the middle of complete()
+        before = repository(env).registry_state()
+        with pytest.raises(EngineError) as err:  # registering k2 needs effective exclusion
+            service(rotate)
+        assert err.value.code is ErrorCode.SERVICE_UNAVAILABLE
+        assert repository(env).registry_state() == before  # nothing changed underneath the child
+    finally:
+        resume.set()
+    assert q.get(timeout=120)[0] == "ok"
+    p.join(60)
+    assert p.exitcode == 0
+    service(rotate)  # now the registry change goes through
+    after = repository(rotate).registry_state()
+    assert (after.generation, after.active_key_id) == (before.generation + 1, "k2")
+
+
+def test_rev17_startup_with_an_unchanged_registry_is_read_only(tmp_path: Path) -> None:
+    env = engine_env(tmp_path / "engine")
+    service(env)
+    with raw_db(env) as conn:
+        before = conn.execute("SELECT value FROM engine_meta WHERE key = 'key_catalog'").fetchone()
+    service(env)
+    with raw_db(env) as conn:
+        assert conn.execute("SELECT value FROM engine_meta WHERE key = 'key_catalog'").fetchone() == before
+
+
+# ---------------------------------------------------------------------------------- REV-18
+
+
+def test_rev18_counters_exist_from_key_registration(tmp_path: Path) -> None:
+    env = engine_env(tmp_path / "engine")
+    service(env)
+    with raw_db(env) as conn:
+        rows = sorted(conn.execute("SELECT key_id, purpose, next_counter FROM nonce_counters").fetchall())
+    assert rows == [("k1", "artifact", 0), ("k1", "state", 0)]
+    assert repository(env).nonce_key_ids() == set()  # registered, never used
+
+
+def test_rev18_deleting_a_used_counter_never_restarts_the_sequence(
+    tmp_path: Path, pki: LabPki, pdf: bytes
+) -> None:
+    env = engine_env(tmp_path / "engine")
+    svc = service(env)
+    prepare(svc, pki, pdf)  # state and artifact counters now advanced
+    with raw_db(env) as conn:
+        assert conn.execute("DELETE FROM nonce_counters WHERE purpose = 'state'").rowcount == 1
+    with pytest.raises(StateIntegrityError, match="nonce counter is missing"):
+        repository(env).reserve_nonce_block("k1", Purpose.STATE, 8)  # direct reservation
+    with pytest.raises(StateIntegrityError):
+        service(env)  # process restart
+    with pytest.raises(EngineError) as err:  # running process with a warm in-memory block
+        prepare(svc, pki, pdf)
+    assert err.value.code is ErrorCode.INTERNAL_ERROR
+
+
+# ---------------------------------------------------------------------------------- REV-19
+
+
+def test_rev19_lease_never_outlives_the_deadline(tmp_path: Path, pki: LabPki, pdf: bytes) -> None:
+    env = engine_env(tmp_path / "engine")
+    view = prepare(service(env), pki, pdf)
+    now = view.record.created_at
+    deadline = now + dt.timedelta(seconds=30)
+    claim = repository(env).claim_completion(
+        view.record.preparation_id,
+        binding="b",
+        attempt_id=ATTEMPT_ID,
+        owner="A",
+        now=now,
+        lease_until=now + dt.timedelta(hours=1),
+        deadline=deadline,
+    )
+    assert claim.record.lease_expires_at == deadline
+
+
+def test_rev19_commit_is_refused_at_the_deadline_even_with_a_live_lease(
+    tmp_path: Path, pki: LabPki, pdf: bytes
+) -> None:
+    from signport_engine.persistence.repository import ArtifactInfo
+
+    env = engine_env(tmp_path / "engine")
+    svc = service(env)
+    art = ArtifactInfo("artifacts/x/y.bin", "0" * 64, 1, "k1")
+    repo = repository(env)
+    for offset, ok in ((-1, True), (0, False)):
+        view = prepare(svc, pki, pdf)
+        pid, now = view.record.preparation_id, view.record.created_at
+        claim = repo.claim_completion(
+            pid,
+            binding="b",
+            attempt_id=ATTEMPT_ID,
+            owner="A",
+            now=now,
+            lease_until=now + dt.timedelta(hours=1),
+            deadline=now + dt.timedelta(hours=2),
+        )
+        deadline = now + dt.timedelta(seconds=10)  # tighter than the lease
+        at = deadline + dt.timedelta(seconds=offset)
+        if ok:
+            done = repo.mark_completed(
+                pid, token=claim.token, binding="b", artifact=art, deadline=deadline, now=at
+            )
+            assert done.status is PreparationStatus.COMPLETED
+        else:
+            with pytest.raises(EngineError) as err:
+                repo.mark_completed(
+                    pid, token=claim.token, binding="b", artifact=art, deadline=deadline, now=at
+                )
+            assert err.value.code is ErrorCode.CONFLICT
+
+
+def test_rev19_time_is_read_after_waiting_for_the_write_lock(tmp_path: Path, pki: LabPki, pdf: bytes) -> None:
+    """A claim that waited on SQLite's write lock past expires_at must see the late time."""
+    env = engine_env(tmp_path / "engine")
+    clock = FakeClock()
+    view = prepare(service(env, clock=clock), pki, pdf)
+    repo = repository(env, clock=clock)
+    outcome: list[Any] = []
+    blocker = sqlite3.connect(Path(env["ENGINE_DATA_DIR"]) / "engine.sqlite3", isolation_level=None)
+    blocker.execute("BEGIN IMMEDIATE")
+
+    def claimer() -> None:
+        outcome.append(
+            repo.claim_completion(
+                view.record.preparation_id,
+                binding="b",
+                attempt_id=ATTEMPT_ID,
+                owner="A",
+                lease=dt.timedelta(seconds=60),
+                deadline=view.record.expires_at + dt.timedelta(seconds=300),
+            )
+        )
+
+    t = threading.Thread(target=claimer)
+    t.start()
+    time.sleep(0.5)  # the claim is now waiting for the write lock
+    clock.current = view.record.expires_at + dt.timedelta(seconds=1)
+    blocker.execute("COMMIT")
+    blocker.close()
+    t.join(30)
+    assert outcome[0].kind is ClaimKind.EXPIRED
