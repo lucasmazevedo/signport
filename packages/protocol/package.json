@@ -1,0 +1,35 @@
+{
+  "name": "@signport/protocol",
+  "version": "0.1.0-draft.1",
+  "private": true,
+  "description": "Canonical SignPort contracts: JSON Schema 2020-12, OpenAPI 3.1, error taxonomy and synthetic fixtures.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "files": [
+    "schemas",
+    "openapi",
+    "errors",
+    "fixtures",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "lint:openapi": "redocly lint --config redocly.yaml openapi/engine.v1.yaml openapi/hub-authorization.v1.yaml",
+    "test": "vitest run",
+    "check": "pnpm run lint:openapi && pnpm run test",
+    "fixtures:crypto": "node scripts/generate-crypto-fixtures.mjs"
+  },
+  "devDependencies": {
+    "@redocly/cli": "2.82.0",
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
+    "canonicalize": "5.1.0",
+    "jose": "6.2.18",
+    "vitest": "5.1.2",
+    "yaml": "2.9.1"
+  },
+  "packageManager": "pnpm@12.4.2"
+}

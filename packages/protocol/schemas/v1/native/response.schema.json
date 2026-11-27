@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://signport.invalid/schemas/v1/native/response.schema.json",
+  "title": "Native Messaging response, protocol 1",
+  "description": "Message sent by the native host to the extension. Exactly one of 'result' (success) or 'error' (failure). The result shape depends on the correlated request action; see results.schema.json. requestId may be null only when the request could not be parsed. Validation order on the host: framing and size, UTF-8 JSON without duplicate keys, then the 'protocol' field, then the full schema. A request with an unsupported protocol number is answered with a protocol-1 failure envelope carrying VERSION_UNSUPPORTED and supportedProtocolVersions.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "protocol",
+    "requestId",
+    "success"
+  ],
+  "properties": {
+    "protocol": {
+      "const": 1
+    },
+    "requestId": {
+      "oneOf": [
+        {
+          "$ref": "../common.schema.json#/$defs/Uuid"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "success": {
+      "type": "boolean"
+    },
+    "result": {
+      "type": "object"
+    },
+    "error": {
+      "$ref": "../errors.schema.json#/$defs/NativeError"
+    }
+  },
+  "oneOf": [
+    {
+      "properties": {
+        "success": {
+          "const": true
+        },
+        "requestId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "result"
+      ],
+      "not": {
+        "required": [
+          "error"
+        ]
+      }
+    },
+    {
+      "properties": {
+        "success": {
+          "const": false
+        }
+      },
+      "required": [
+        "error"
+      ],
+      "not": {
+        "required": [
+          "result"
+        ]
+      }
+    }
+  ]
+}

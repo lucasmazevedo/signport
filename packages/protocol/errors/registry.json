@@ -1,0 +1,488 @@
+{
+  "version": 1,
+  "description": "Canonical SignPort error taxonomy. 'retryable' is the default for the code: true means the identical request may be re-sent without risk of a duplicate effect; false means the caller must reconcile state and/or start a new attempt. Producers may set retryable=false where the registry says true, never the reverse. 'surfaces' lists where the code may appear: native (Native Messaging responses and SDK errors), hub (Hub HTTP API), engine (Engine HTTP API). 'origins' lists which native component may emit a native code.",
+  "errors": [
+    {
+      "code": "EXTENSION_MISSING",
+      "surfaces": [
+        "native"
+      ],
+      "origins": [
+        "sdk"
+      ],
+      "http_status": null,
+      "retryable": false,
+      "description": "Extension not installed, disabled or not reachable from the page bridge."
+    },
+    {
+      "code": "HOST_MISSING",
+      "surfaces": [
+        "native"
+      ],
+      "origins": [
+        "extension"
+      ],
+      "http_status": null,
+      "retryable": false,
+      "description": "Native host not installed or its manifest is not registered for this browser."
+    },
+    {
+      "code": "VERSION_UNSUPPORTED",
+      "surfaces": [
+        "native",
+        "hub"
+      ],
+      "origins": [
+        "sdk",
+        "extension",
+        "host"
+      ],
+      "http_status": 426,
+      "retryable": false,
+      "description": "Protocol or client version not supported; native errors carry supportedProtocolVersions. Never fail silently; update required."
+    },
+    {
+      "code": "ORIGIN_DENIED",
+      "surfaces": [
+        "native",
+        "hub"
+      ],
+      "origins": [
+        "extension",
+        "host"
+      ],
+      "http_status": 403,
+      "retryable": false,
+      "description": "Calling origin is not approved, or differs from the origin bound in the authorization."
+    },
+    {
+      "code": "INSTANCE_UNTRUSTED",
+      "surfaces": [
+        "native"
+      ],
+      "origins": [
+        "host"
+      ],
+      "http_status": null,
+      "retryable": false,
+      "description": "Issuer, instance or key id is not in the host's locally trusted, non-revoked instance store."
+    },
+    {
+      "code": "INVALID_MESSAGE",
+      "surfaces": [
+        "native"
+      ],
+      "origins": [
+        "extension",
+        "host"
+      ],
+      "http_status": null,
+      "retryable": false,
+      "description": "Framing, size, JSON or schema violation, or unknown action."
+    },
+    {
+      "code": "AUTHORIZATION_INVALID",
+      "surfaces": [
+        "native",
+        "hub"
+      ],
+      "origins": [
+        "host"
+      ],
+      "http_status": 401,
+      "retryable": false,
+      "description": "JWS signature, header, algorithm, audience or claim binding invalid, or claims do not match the command."
+    },
+    {
+      "code": "AUTHORIZATION_EXPIRED",
+      "surfaces": [
+        "native",
+        "hub"
+      ],
+      "origins": [
+        "host"
+      ],
+      "http_status": 410,
+      "retryable": false,
+      "description": "Authorization outside its nbf/exp window."
+    },
+    {
+      "code": "AUTHORIZATION_REVOKED",
+      "surfaces": [
+        "native",
+        "hub"
+      ],
+      "origins": [
+        "host"
+      ],
+      "http_status": 409,
+      "retryable": false,
+      "description": "Authorization was revoked or its attempt is no longer active."
+    },
+    {
+      "code": "REPLAY",
+      "surfaces": [
+        "native",
+        "hub"
+      ],
+      "origins": [
+        "host"
+      ],
+      "http_status": 409,
+      "retryable": false,
+      "description": "Authorization (jti) already consumed. Consumption is never idempotent."
+    },
+    {
+      "code": "AUTHORIZATION_CONSUME_FAILED",
+      "surfaces": [
+        "native"
+      ],
+      "origins": [
+        "host"
+      ],
+      "http_status": null,
+      "retryable": false,
+      "description": "Online consumption could not be confirmed (network failure, timeout or ambiguous response). The authorization may already be consumed server-side: fail closed, never perform the cryptographic operation, query the attempt state at the Hub before any new attempt."
+    },
+    {
+      "code": "CONSENT_DECLINED",
+      "surfaces": [
+        "native"
+      ],
+      "origins": [
+        "host"
+      ],
+      "http_status": null,
+      "retryable": false,
+      "description": "User declined or closed the native consent dialog. No key access occurred."
+    },
+    {
+      "code": "CERT_NOT_FOUND",
+      "surfaces": [
+        "native"
+      ],
+      "origins": [
+        "host"
+      ],
+      "http_status": null,
+      "retryable": false,
+      "description": "No certificate with the requested fingerprint and an accessible private key."
+    },
+    {
+      "code": "TOKEN_REMOVED",
+      "surfaces": [
+        "native"
+      ],
+      "origins": [
+        "host"
+      ],
+      "http_status": null,
+      "retryable": false,
+      "description": "Token or smart card removed or unavailable during the operation."
+    },
+    {
+      "code": "PIN_CANCELLED",
+      "surfaces": [
+        "native"
+      ],
+      "origins": [
+        "host"
+      ],
+      "http_status": null,
+      "retryable": false,
+      "description": "User cancelled the middleware PIN prompt. The host never retries PIN entry."
+    },
+    {
+      "code": "PIN_BLOCKED",
+      "surfaces": [
+        "native"
+      ],
+      "origins": [
+        "host"
+      ],
+      "http_status": null,
+      "retryable": false,
+      "description": "Middleware reports a blocked PIN."
+    },
+    {
+      "code": "DRIVER_UNAVAILABLE",
+      "surfaces": [
+        "native"
+      ],
+      "origins": [
+        "host"
+      ],
+      "http_status": null,
+      "retryable": false,
+      "description": "CSP/KSP/PKCS#11 middleware missing, not allowlisted or failing."
+    },
+    {
+      "code": "UNSUPPORTED_ALGORITHM",
+      "surfaces": [
+        "native",
+        "hub",
+        "engine"
+      ],
+      "origins": [
+        "host"
+      ],
+      "http_status": 422,
+      "retryable": false,
+      "description": "Digest or signature algorithm not supported or not allowed by configuration."
+    },
+    {
+      "code": "NATIVE_DISCONNECTED",
+      "surfaces": [
+        "native"
+      ],
+      "origins": [
+        "sdk",
+        "extension"
+      ],
+      "http_status": null,
+      "retryable": false,
+      "description": "Native port disconnected before a response. For signHash the result is unknown: reconcile, do not resend."
+    },
+    {
+      "code": "TIMEOUT",
+      "surfaces": [
+        "native"
+      ],
+      "origins": [
+        "sdk",
+        "extension"
+      ],
+      "http_status": null,
+      "retryable": false,
+      "description": "No response within the deadline. For signHash the result is unknown: reconcile, do not resend."
+    },
+    {
+      "code": "VALIDATION_FAILED",
+      "surfaces": [
+        "hub",
+        "engine"
+      ],
+      "origins": [],
+      "http_status": 422,
+      "retryable": false,
+      "description": "Request body or parameters violate the contract."
+    },
+    {
+      "code": "UNAUTHENTICATED",
+      "surfaces": [
+        "hub",
+        "engine"
+      ],
+      "origins": [],
+      "http_status": 401,
+      "retryable": false,
+      "description": "Missing or invalid session, service credential or client certificate."
+    },
+    {
+      "code": "FORBIDDEN",
+      "surfaces": [
+        "hub",
+        "engine"
+      ],
+      "origins": [],
+      "http_status": 403,
+      "retryable": false,
+      "description": "Authenticated but not authorized for this tenant, resource or action."
+    },
+    {
+      "code": "NOT_FOUND",
+      "surfaces": [
+        "hub",
+        "engine"
+      ],
+      "origins": [],
+      "http_status": 404,
+      "retryable": false,
+      "description": "Resource does not exist or is not visible to the caller (no cross-tenant disclosure)."
+    },
+    {
+      "code": "CONFLICT",
+      "surfaces": [
+        "hub",
+        "engine"
+      ],
+      "origins": [],
+      "http_status": 409,
+      "retryable": false,
+      "description": "Resource state does not allow the transition."
+    },
+    {
+      "code": "IDEMPOTENCY_CONFLICT",
+      "surfaces": [
+        "hub",
+        "engine"
+      ],
+      "origins": [],
+      "http_status": 409,
+      "retryable": false,
+      "description": "Idempotency-Key reused with a different request."
+    },
+    {
+      "code": "ATTEMPT_NOT_ACTIVE",
+      "surfaces": [
+        "hub"
+      ],
+      "origins": [],
+      "http_status": 409,
+      "retryable": false,
+      "description": "Signing attempt is terminal, cancelled or expired."
+    },
+    {
+      "code": "CONSENT_REQUIRED",
+      "surfaces": [
+        "hub"
+      ],
+      "origins": [],
+      "http_status": 409,
+      "retryable": false,
+      "description": "No consent recorded for the exact document version and manifest."
+    },
+    {
+      "code": "PREPARATION_EXPIRED",
+      "surfaces": [
+        "hub",
+        "engine"
+      ],
+      "origins": [],
+      "http_status": 410,
+      "retryable": false,
+      "description": "Preparation expired; a new preparation and authorization are required."
+    },
+    {
+      "code": "STORAGE_REF_INVALID",
+      "surfaces": [
+        "engine"
+      ],
+      "origins": [],
+      "http_status": 422,
+      "retryable": false,
+      "description": "Storage reference unknown or not authorized for the caller."
+    },
+    {
+      "code": "DOCUMENT_HASH_MISMATCH",
+      "surfaces": [
+        "engine"
+      ],
+      "origins": [],
+      "http_status": 422,
+      "retryable": false,
+      "description": "Stored document SHA-256 differs from the expected value."
+    },
+    {
+      "code": "DOCUMENT_INVALID",
+      "surfaces": [
+        "hub",
+        "engine"
+      ],
+      "origins": [],
+      "http_status": 422,
+      "retryable": false,
+      "description": "PDF malformed, encrypted without explicit flow, active content not allowed, or limits exceeded."
+    },
+    {
+      "code": "CERTIFICATE_INVALID",
+      "surfaces": [
+        "hub",
+        "engine"
+      ],
+      "origins": [],
+      "http_status": 422,
+      "retryable": false,
+      "description": "Certificate unparsable, expired, not yet valid, wrong key usage or not eligible."
+    },
+    {
+      "code": "CERTIFICATE_MISMATCH",
+      "surfaces": [
+        "hub",
+        "engine"
+      ],
+      "origins": [],
+      "http_status": 422,
+      "retryable": false,
+      "description": "Certificate or fingerprint differs from the one bound to the preparation or attempt."
+    },
+    {
+      "code": "UNSUPPORTED_POLICY",
+      "surfaces": [
+        "engine"
+      ],
+      "origins": [],
+      "http_status": 422,
+      "retryable": false,
+      "description": "Requested signature policy unknown or not enabled."
+    },
+    {
+      "code": "SIGNATURE_INVALID",
+      "surfaces": [
+        "hub",
+        "engine"
+      ],
+      "origins": [],
+      "http_status": 422,
+      "retryable": false,
+      "description": "Raw signature does not verify against the bound certificate and signed attributes."
+    },
+    {
+      "code": "CMS_RESERVATION_EXCEEDED",
+      "surfaces": [
+        "engine"
+      ],
+      "origins": [],
+      "http_status": 409,
+      "retryable": false,
+      "description": "CMS does not fit the reserved placeholder; a new preparation and authorization are required."
+    },
+    {
+      "code": "PAYLOAD_TOO_LARGE",
+      "surfaces": [
+        "hub",
+        "engine"
+      ],
+      "origins": [],
+      "http_status": 413,
+      "retryable": false,
+      "description": "Body exceeds configured limits."
+    },
+    {
+      "code": "RATE_LIMITED",
+      "surfaces": [
+        "hub",
+        "engine"
+      ],
+      "origins": [],
+      "http_status": 429,
+      "retryable": true,
+      "description": "Rate limit reached; honor Retry-After."
+    },
+    {
+      "code": "INTERNAL_ERROR",
+      "surfaces": [
+        "native",
+        "hub",
+        "engine"
+      ],
+      "origins": [
+        "host"
+      ],
+      "http_status": 500,
+      "retryable": false,
+      "description": "Unexpected failure. No stack traces or sensitive data in the message."
+    },
+    {
+      "code": "SERVICE_UNAVAILABLE",
+      "surfaces": [
+        "hub",
+        "engine"
+      ],
+      "origins": [],
+      "http_status": 503,
+      "retryable": true,
+      "description": "Service not ready or a required dependency (storage, database, trust bundle) unavailable."
+    }
+  ]
+}

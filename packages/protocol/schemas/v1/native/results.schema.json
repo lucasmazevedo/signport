@@ -1,0 +1,230 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://signport.invalid/schemas/v1/native/results.schema.json",
+  "title": "Native Messaging results, protocol 1",
+  "description": "Result objects per action. Consumers select the definition by the action of the correlated request. Nothing returned here is trusted by Hub/Engine without server-side verification.",
+  "$defs": {
+    "GetVersionResult": {
+      "description": "Protocol negotiation (frozen for all future protocol versions: every host must keep answering a protocol-1 getVersion with this shape). applicationVersion is the host software release, never the protocol version. The extension selects the highest common value of supportedProtocolVersions; if there is none it reports VERSION_UNSUPPORTED with both lists and never proceeds silently.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "applicationVersion",
+        "supportedProtocolVersions",
+        "capabilities",
+        "platform"
+      ],
+      "properties": {
+        "applicationVersion": {
+          "$ref": "../common.schema.json#/$defs/SemVer"
+        },
+        "supportedProtocolVersions": {
+          "$ref": "#/$defs/ProtocolVersionList"
+        },
+        "capabilities": {
+          "description": "Actions the host accepts in the negotiated protocol.",
+          "type": "array",
+          "uniqueItems": true,
+          "minItems": 1,
+          "maxItems": 16,
+          "items": {
+            "$ref": "request.schema.json#/$defs/Action"
+          }
+        },
+        "platform": {
+          "type": "string",
+          "enum": [
+            "windows-x64",
+            "windows-x86"
+          ]
+        }
+      }
+    },
+    "GetCapabilitiesResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "digestAlgorithms",
+        "signatureAlgorithms",
+        "keyProviders",
+        "maxMessageBytes"
+      ],
+      "properties": {
+        "digestAlgorithms": {
+          "type": "array",
+          "uniqueItems": true,
+          "minItems": 1,
+          "maxItems": 4,
+          "items": {
+            "$ref": "../common.schema.json#/$defs/DigestAlgorithm"
+          }
+        },
+        "signatureAlgorithms": {
+          "type": "array",
+          "uniqueItems": true,
+          "minItems": 1,
+          "maxItems": 4,
+          "items": {
+            "$ref": "../common.schema.json#/$defs/SignatureAlgorithm"
+          }
+        },
+        "keyProviders": {
+          "type": "array",
+          "uniqueItems": true,
+          "maxItems": 4,
+          "items": {
+            "type": "string",
+            "enum": [
+              "CNG",
+              "CAPI",
+              "PKCS11"
+            ]
+          }
+        },
+        "maxMessageBytes": {
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 262144
+        }
+      },
+      "description": "Cryptographic capabilities of the host. Supported actions are reported by getVersion.capabilities."
+    },
+    "CertificateSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "certificateSha256",
+        "subject",
+        "issuer",
+        "serialNumberHex",
+        "notBefore",
+        "notAfter",
+        "keyAlgorithm",
+        "hasPrivateKey",
+        "eligibility"
+      ],
+      "properties": {
+        "certificateSha256": {
+          "description": "SHA-256 over the certificate DER.",
+          "$ref": "../common.schema.json#/$defs/Sha256Hex"
+        },
+        "subject": {
+          "$ref": "../common.schema.json#/$defs/DisplayText"
+        },
+        "issuer": {
+          "$ref": "../common.schema.json#/$defs/DisplayText"
+        },
+        "serialNumberHex": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{1,64}$"
+        },
+        "notBefore": {
+          "$ref": "../common.schema.json#/$defs/Timestamp"
+        },
+        "notAfter": {
+          "$ref": "../common.schema.json#/$defs/Timestamp"
+        },
+        "keyAlgorithm": {
+          "type": "string",
+          "enum": [
+            "RSA",
+            "EC",
+            "OTHER"
+          ]
+        },
+        "keySizeBits": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16384
+        },
+        "hasPrivateKey": {
+          "description": "Private key associated in the store. Does not guarantee the token is connected.",
+          "type": "boolean"
+        },
+        "eligibility": {
+          "description": "Indicative only, computed locally. A1/A3 is never inferred from the name. Trust, CPF and policy are decided server-side.",
+          "type": "string",
+          "enum": [
+            "eligible",
+            "expired",
+            "not_yet_valid",
+            "unsupported_key",
+            "unknown"
+          ]
+        }
+      }
+    },
+    "ListCertificatesResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "certificates"
+      ],
+      "properties": {
+        "certificates": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "$ref": "#/$defs/CertificateSummary"
+          }
+        }
+      }
+    },
+    "ReadCertificateResult": {
+      "description": "Public certificate and locally available chain. Never private key material.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "certificateSha256",
+        "certificateDerB64",
+        "chainDerB64"
+      ],
+      "properties": {
+        "certificateSha256": {
+          "$ref": "../common.schema.json#/$defs/Sha256Hex"
+        },
+        "certificateDerB64": {
+          "$ref": "../common.schema.json#/$defs/DerBase64"
+        },
+        "chainDerB64": {
+          "$ref": "../common.schema.json#/$defs/CertificateChain"
+        }
+      }
+    },
+    "SignHashResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attemptId",
+        "certificateSha256",
+        "signatureAlgorithm",
+        "signatureB64"
+      ],
+      "properties": {
+        "attemptId": {
+          "$ref": "../common.schema.json#/$defs/Uuid"
+        },
+        "certificateSha256": {
+          "$ref": "../common.schema.json#/$defs/Sha256Hex"
+        },
+        "signatureAlgorithm": {
+          "$ref": "../common.schema.json#/$defs/SignatureAlgorithm"
+        },
+        "signatureB64": {
+          "$ref": "../common.schema.json#/$defs/RsaSignatureBase64"
+        }
+      }
+    },
+    "ProtocolVersionList": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 1000
+      }
+    }
+  }
+}

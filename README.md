@@ -48,10 +48,10 @@ flowchart TD
 
 ## Getting started
 
-This repository currently contains design documents, agent instructions and component scaffolds only. There is no executable installation or Docker Compose deployment yet.
+This repository currently contains design documents, agent instructions, component scaffolds and the in-progress P0 protocol contracts (schemas and contract tests only, not a running service). There is no executable installation or Docker Compose deployment yet.
 
-1. Read [SPEC.md](SPEC.md) (v2.3) and [AGENTS.md](AGENTS.md).
-2. Follow [ROADMAP.md](ROADMAP.md), beginning with P0: protocol contracts.
+1. Read [SPEC.md](SPEC.md) (v2.3.1) and [AGENTS.md](AGENTS.md).
+2. Follow [ROADMAP.md](ROADMAP.md), the canonical implementation order, beginning with P0: protocol contracts ([packages/protocol](packages/protocol/)).
 3. See [the first development task](docs/first-agent-task.md) and [release gates](docs/release-gates.md).
 
 ## Security and independence

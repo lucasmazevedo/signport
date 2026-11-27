@@ -1,0 +1,41 @@
+{
+  "schema": "https://signport.invalid/schemas/v1/common.schema.json#/$defs/Sha256Base64",
+  "description": "SHA-256 Base64 digests: exactly 32 bytes, canonical padding.",
+  "valid": [
+    {
+      "name": "signed attributes digest",
+      "data": "//0rVG4gB7nrYwgVR0XZn5PfJlNXUS9vUn5kzLY9NAc="
+    },
+    {
+      "name": "byte range digest",
+      "data": "JNdMGc/tNt+VOGJKyWKnwGKpAmgmVX/PU8T65xkBEjA="
+    }
+  ],
+  "invalid": [
+    {
+      "name": "hex document hash in a digest field",
+      "data": "93b5d4f9dd9cd6512f1857fee0ae17b5a0f5f720b2a217f8deaaa4df0b4f2f9a",
+      "reason": "PDF hash (hex) must not be used where the CMS digest is expected"
+    },
+    {
+      "name": "31-byte digest",
+      "data": "//0rVG4gB7nrYwgVR0XZn5PfJlNXUS9vUn5kzLY9NA==",
+      "reason": "wrong length"
+    },
+    {
+      "name": "non-canonical final character",
+      "data": "//0rVG4gB7nrYwgVR0XZn5PfJlNXUS9vUn5kzLY9NAd=",
+      "reason": "non-zero padding bits"
+    },
+    {
+      "name": "base64url alphabet",
+      "data": "__0rVG4gB7nrYwgVR0XZn5PfJlNXUS9vUn5kzLY9NAc=",
+      "reason": "standard alphabet required"
+    },
+    {
+      "name": "unpadded",
+      "data": "//0rVG4gB7nrYwgVR0XZn5PfJlNXUS9vUn5kzLY9NAc",
+      "reason": "padding required"
+    }
+  ]
+}

@@ -2,7 +2,9 @@
 
 **Open Source Edition**
 
-**Versão:** 2.3 | **Data:** 26/11/2026 | **Estado:** arquitetura e estratégia de licença aprovadas pelo solicitante; publicação, integração cloud e homologação pendentes
+**Versão:** 2.3.1 | **Data:** 27/11/2026 | **Estado:** arquitetura e estratégia de licença aprovadas pelo solicitante; publicação, integração cloud e homologação pendentes
+
+**Histórico v2.3.1:** corrige identificador .NET alterado no rename (`RSASignaturePadding`); adota ROADMAP.md como referência canônica da ordem de implementação e harmoniza as seções 13, 21 e 28; introduz a fase P1.5 — Authorization Foundation no Hub (ADR-0013); define a API interna canônica do Engine sem aliases (ADR-0014); padroniza WiX Toolset/MSI como instalador Windows; define negociação de protocolo Native Messaging e separação de versões (§8.4); perfil JWS ES256 com R||S, rejeição de membros duplicados e JCS RFC 8785 (§8.5); exceção explícita EXC-01 para HTTP Hub→Engine apenas em desenvolvimento e testes isolados (§10). Seção 30 registra os ADRs 0013 e 0014.
 
 **Histórico v2.3:** renomeia o projeto para SignPort e define governança founder-led, repositório pessoal inicial e identidade técnica independente. ADR-0012 (seção 29) complementa os anteriores.
 
@@ -60,7 +62,7 @@ Decisão: Hub é fonte de verdade do workflow. Engine é privado e mantém artef
 | Extension | TypeScript, WXT, Manifest V3, React opcional | Chrome e Edge; service worker e popup de diagnóstico |
 | SDK | TypeScript, Vitest | Biblioteca de integração web, inicialmente interna ao Hub |
 | Desktop | .NET 10 LTS, Windows Certificate Store, System.Security.Cryptography, WPF mínimo para consentimento | Host nativo sob demanda |
-| Distribuição | WiX Toolset / MSI (a validar), Chrome Web Store, Edge Add-ons | Instalação e atualização autenticadas |
+| Distribuição | WiX Toolset / MSI (escolhido, condicionado à validação dos termos da versão utilizada), Chrome Web Store, Edge Add-ons | Instalação e atualização autenticadas |
 | Desktop | PKCS11Interop e middleware do fabricante (fallback) | Tokens sem integração adequada ao Windows |
 | Storage | Filesystem privado (default), S3 opcional, versionamento e criptografia | PDFs e estado temporário |
 | Infra | Docker Compose, Caddy (Nginx alternativo), TLS, secret store, backups | Implantação inicial |
@@ -190,12 +192,16 @@ Estados alternativos: `failed`, `cancelled`, `expired`, `validation_indeterminat
 | POST /validations | Validar PDF |
 | GET /validations/{id} | Relatório |
 | POST /signing-requests/{id}/local/certificate | Browser entrega certificado público e cadeia |
-| GET /signing-requests/{id}/local/challenge | Browser obtém desafio JWS após preparação e consentimento |
-| POST /local/authorizations/consume | Host consome autorização assinada de uso único, via HTTPS |
+| POST /local/authorizations | Sessão autenticada obtém autorização JWS da tentativa após preparação e consentimento (P1.5, ADR-0013) |
+| POST /local/authorizations/consume | Host consome autorização assinada de uso único, via HTTPS, após consentimento local e antes da operação criptográfica (P1.5) |
+| POST /local/authorizations/{id}/revoke | Revogar autorização não consumida (P1.5) |
+| GET /instance | Identidade pública da instalação, versões de protocolo e link de fonte correspondente (P1.5) |
 | POST /signing-requests/{id}/local/result | Browser autenticado entrega assinatura bruta e attempt_id |
 | GET /local/client-versions | Versões mínimas e URLs oficiais de instalação |
 | POST /cloud/birdid/authorize | Iniciar autorização OAuth |
 | GET /cloud/birdid/callback | Validar retorno OAuth |
+
+Fora do prefixo `/api/v1`: `GET /.well-known/jwks.json` publica as chaves públicas de autorização local (P1.5). Publicar JWKS não substitui o bootstrap confiável da chave no host (seção 27.1). Os contratos canônicos dos endpoints P1.5 estão em `packages/protocol/openapi/hub-authorization.v1.yaml`; os demais endpoints desta tabela serão especificados no OpenAPI na P5.
 
 Exemplo de criação (contrato interno, não API de fornecedor):
 
@@ -213,28 +219,27 @@ Eventos `signature.signed`, `signature.failed`, `signature.expired`, `batch.comp
 
 ## 7. SignPortEngine — implementação Python
 
-```
-app/main.py
-app/api/v1/{prepare,complete,validate,health}.py
-app/domain/{policies,preparation,verification}.py
-app/services/{pades,cms,trust,storage,timestamp}.py
-app/repositories/preparations.py
-tests/{unit,integration,fixtures}/
-```
+Estrutura de código: ver seção 25.2 (`src/signport_engine/...`).
 
 API interna autenticada (mTLS ou credencial de serviço rotacionável + rede privada):
 
+Contrato canônico (ADR-0014): `packages/protocol/openapi/engine.v1.yaml`. Não há aliases nem rotas concorrentes.
+
 | Rota | Contrato |
 |---|---|
-| POST /v1/preparations | version_id, storage_ref, sha256, cert_chain_der_b64, policy, appearance, expires_at |
-| GET /v1/preparations/{id} | estado, digest a assinar, algoritmo, fingerprint, validade |
-| POST /v1/preparations/{id}/complete | signature_b64, algorithm, attempt_id; verifica e finaliza idempotentemente |
-| DELETE /v1/preparations/{id} | cancela e programa limpeza de temporários |
-| POST /v1/validations | artifact_ref, expected_sha256, expected_policy |
-| GET /v1/validations/{id} | relatório estruturado |
-| GET /health/live e /health/ready | saúde e dependências |
+| POST /v1/pdf/preparations | document_version_id, storage_ref, document_sha256, certificado e cadeia DER, policy, algoritmos, expires_at |
+| GET /v1/pdf/preparations/{id} | estado, digest dos atributos CMS a assinar, digest ByteRange, algoritmo, fingerprint, validade |
+| POST /v1/pdf/preparations/{id}/complete | attempt_id, signature_b64, algoritmo, fingerprint; verifica e finaliza idempotentemente |
+| DELETE /v1/pdf/preparations/{id} | cancela e programa limpeza de temporários |
+| POST /v1/pdf/validations | artifact_ref, expected_sha256, expected_policy |
+| GET /v1/pdf/validations/{id} | relatório estruturado |
+| POST /v1/certificates/inspect | metadados do certificado público |
+| POST /v1/certificates/validate | cadeia, validade, revogação e uso da chave |
+| GET /v1/policies | políticas disponíveis e estado de validação |
+| GET /v1/capabilities | versão, algoritmos, políticas e limites |
+| GET /health/live e GET /health/ready | saúde e dependências |
 
-Resposta de preparação: `{"preparation_id":"uuid","digest_b64":"...","digest_algorithm":"SHA-256","signature_algorithm":"RSA_PKCS1_V1_5","certificate_sha256":"...","expires_at":"ISO-8601 UTC"}`. Digest em Base64 padrão, exatamente 32 bytes ao decodificar. Assinatura em Base64 dos bytes RSA, comprimento compatível com módulo. Storage refs devem ser chaves autorizadas e não URLs ou caminhos arbitrários do usuário.
+Resposta de preparação (resumo; schema completo no OpenAPI): `{"preparation_id":"uuid","status":"prepared","document_sha256":"hex","byte_range_digest_b64":"...","signed_attributes_digest_b64":"...","digest_algorithm":"SHA-256","signature_algorithm":"RSA_PKCS1_V1_5","certificate_sha256":"hex","expires_at":"ISO-8601 UTC"}`. Os nomes distinguem explicitamente SHA-256 do PDF original (hex), digest ByteRange (messageDigest) e digest dos atributos CMS (entrada da assinatura). Digests em Base64 padrão, exatamente 32 bytes ao decodificar; hashes de documento e fingerprints em hexadecimal minúsculo. Assinatura em Base64 dos bytes RSA, comprimento compatível com módulo. Storage refs devem ser chaves autorizadas e não URLs ou caminhos arbitrários do usuário.
 
 Validação deve verificar integridade, cobertura de revisão, cadeia até âncora ICP-Brasil confiável, período de validade, revogação CRL/OCSP, uso da chave, identidade, política, carimbo quando requerido, alterações incrementais e assinaturas anteriores. Resultado com dimensões separadas e decisão final. Falhas externas de revogação não equivalem a certificado válido. Manter bundle de confiança versionado; não confiar em raiz enviada pelo cliente.
 
@@ -272,26 +277,25 @@ sequenceDiagram
     H-->>R: Status e download autorizado
 ```
 
-### 8.2 Repositórios e módulos
+### 8.2 Módulos no monorepo
 
 ```text
-SignPortExtension/
-  entrypoints/background.ts
-  entrypoints/popup/          # diagnóstico e versão
-  lib/{protocol,origin,native,errors}.ts
+apps/extension/
+  entrypoints/{background.ts,popup/,options/}   # popup: diagnóstico e versão
+  lib/{native-messaging,authorization,origin-validator,protocol}.ts
   wxt.config.ts
   tests/
-SignPortSDK/
+packages/sdk-js/
   src/{client,types,errors}.ts
   tests/
-SignPortDesktop/
+apps/desktop/
   src/SignPort.NativeHost/       # framing, dispatcher, ciclo de vida
   src/SignPort.Cryptography/     # Windows CNG/CSP e PKCS#11
   src/SignPort.Security/         # JWS, validação e consumo
   src/SignPort.Consent/          # janela nativa mínima
   src/SignPort.Contracts/
   tests/
-  installer/
+  installer/                     # WiX Toolset / MSI
 ```
 
 ### 8.3 Manifest V3 e ponte web
@@ -316,21 +320,34 @@ SDK TypeScript próprio (nome de pacote e publicação ainda a definir): `isAvai
 
 ### 8.4 Contrato Native Messaging v1
 
+Schemas canônicos: `packages/protocol/schemas/v1/native/`.
+
 Envelope JSON UTF-8: `{ "protocol": 1, "requestId": "uuid", "action": "signHash", "payload": { ... } }`. Resposta: `{ "protocol": 1, "requestId": "uuid", "success": true, "result": { ... } }` ou `success:false` com `error.code`, `error.message`, `error.retryable`. Mensagens prefixadas por comprimento uint32 na ordem de bytes nativa (little endian no Windows). Limite interno de 256 KiB por mensagem, inferior ao limite do Chrome de 1 MiB do host para o navegador. Não transferir PDFs nesse canal. Ler exatamente o comprimento, tratar EOF parcial, rejeitar tamanho inválido antes de alocar e limitar JSON. stdout exclusivo do protocolo; stderr/logs sanitizados. Serializar operações com token.
 
 | Comando | Entrada | Resultado |
 |---|---|---|
-| getVersion / getCapabilities | vazio | versão, protocolos e algoritmos |
+| getVersion | vazio | negociação: `applicationVersion`, `supportedProtocolVersions`, `capabilities`, plataforma |
+| getCapabilities | vazio | algoritmos, provedores de chave e limite de mensagem |
 | listCertificates | filtros restritos | fingerprint SHA-256, nome, validade, elegibilidade indicativa |
 | readCertificate | fingerprint | DER Base64 e cadeia disponível |
-| signHash | attemptId, digest Base64, algoritmo, fingerprint, JWS | assinatura RSA bruta Base64 |
-| signBatch | manifesto autorizado de itens | resultado individual; P1 |
+| signHash | attemptId, digest dos atributos CMS (Base64), algoritmos, fingerprint, JWS | assinatura RSA bruta Base64 |
+| signBatch | manifesto autorizado de itens | resultado individual; P1, reservado e fora do protocolo 1 |
+
+**Negociação e versões.** A extensão envia primeiro `getVersion` com `protocol: 1`; essa forma é congelada para todas as versões futuras. O resultado informa `applicationVersion` (release do host, SemVer), `supportedProtocolVersions` (inteiros) e `capabilities` (ações aceitas). A extensão escolhe o maior protocolo comum; sem interseção, reporta `VERSION_UNSUPPORTED` com as duas listas e nunca prossegue silenciosamente. O host valida na ordem: framing/tamanho, JSON UTF-8 sem membros duplicados, campo `protocol` e schema completo; protocolo desconhecido recebe envelope de falha do protocolo 1 com `VERSION_UNSUPPORTED` e `supportedProtocolVersions`. Versões são independentes e não podem ser confundidas:
+
+| Versão | Exemplo |
+|---|---|
+| Especificação | 2.3.1 |
+| Release do software (host, extensão, Hub, Engine) | 0.1.0 |
+| API REST | v1 |
+| Native Messaging | 1 |
+| Schema individual | versão própria quando necessária (ex.: `manifest_version`) |
 
 Erros: EXTENSION_MISSING, HOST_MISSING, VERSION_UNSUPPORTED, ORIGIN_DENIED, INVALID_MESSAGE, AUTHORIZATION_INVALID, AUTHORIZATION_EXPIRED, REPLAY, CERT_NOT_FOUND, TOKEN_REMOVED, PIN_CANCELLED, PIN_BLOCKED, DRIVER_UNAVAILABLE, UNSUPPORTED_ALGORITHM, NATIVE_DISCONNECTED, TIMEOUT. Não repetir PIN automaticamente. Resultado perdido exige reconciliação; não reexecutar desafio consumido.
 
 ### 8.5 Autorização criptográfica e consentimento
 
-Hub emite JWS assimétrico (ex.: ES256, algoritmo fixado e chave dedicada), com `kid`, `iss`, `aud`, `iat`, `nbf`, `exp`, `jti`, tenant, usuário, tentativa, preparação, SHA-256 da versão original, digest CMS, algoritmo, fingerprint do certificado, finalidade e hash do manifesto de consentimento. TTL inicial 2 minutos ajustável. Host usa chave pública previamente confiável, valida todos os campos, algoritmo, audiência e origem do chamador; não aceita chaves fornecidas pela mensagem. Rotação de chaves por atualização/configuração autenticada, sem aceitar URLs de chave arbitrárias.
+Hub emite JWS assimétrico (ex.: ES256, algoritmo fixado e chave dedicada), com `kid`, `iss`, `aud`, `iat`, `nbf`, `exp`, `jti`, tenant, usuário, tentativa, preparação, SHA-256 da versão original, digest CMS, algoritmo, fingerprint do certificado, finalidade e hash do manifesto de consentimento. TTL inicial 2 minutos ajustável. Perfil obrigatório: `alg` exclusivamente ES256 e `typ` `signport-local-authz+jwt` (outros algoritmos rejeitados, nunca negociados pelo header); `aud` `org.signport.nativehost`; `iss` e `kid` vinculados a uma instalação previamente autorizada no armazenamento local do host; nenhuma chave aceita do JWS (`jwk`, `jku`, `x5u`, `x5c`, `crit` rejeitados). A assinatura ES256 do JWS é a concatenação R||S de 64 bytes (RFC 7518 §3.4), não ASN.1 DER — `openssl_sign` do PHP produz DER e exige conversão; .NET `ECDsa` usa IEEE P1363 por padrão. Header e payload são analisados rejeitando membros JSON duplicados, inclusive após decodificar escapes (RFC 7493). O hash do manifesto usa RFC 8785 (JCS) — ordenar propriedades alfabeticamente não basta — e toda implementação (PHP, .NET, JS) deve passar os vetores `packages/protocol/fixtures/v1/crypto/jcs.vectors.json`. O host recalcula o hash do manifesto antes de exibir o consentimento, exibe exatamente o manifesto assinado e só acessa a chave após consumo online confirmado; `AUTHORIZATION_CONSUME_FAILED` (timeout ou resposta ambígua) significa que a autorização pode já ter sido consumida: abortar sem operação criptográfica e consultar o estado antes de nova tentativa. O Desktop assina o digest dos atributos CMS com `SignHash()`, nunca `SignData()`, evitando hash duplo. Claims canônicos em `packages/protocol/schemas/v1/authorization/`; emissão, JWKS, consumo e revogação são implementados na P1.5 (ADR-0013). Host usa chave pública previamente confiável, valida todos os campos, algoritmo, audiência e origem do chamador; não aceita chaves fornecidas pela mensagem. Rotação de chaves por atualização/configuração autenticada, sem aceitar URLs de chave arbitrárias.
 
 Para impedir replay mesmo após reinício do host, exigir consumo online atômico do jti no Hub via HTTPS em endpoint dedicado. O endpoint aceita exclusivamente JWS válido de uso único, verifica tentativa ativa, tenant, consentimento, revogação e expiração, registra consumo antes de responder; não concede sessão web ou acesso geral. Não persistir JWS além do necessário. Se rede indisponível ou resposta ambígua, falhar fechado e solicitar nova tentativa após reconciliação. O JWS é uma capacidade sensível e não substitui autenticação da sessão web no endpoint de resultado.
 
@@ -352,7 +369,7 @@ static byte[] SignDigest(X509Certificate2 cert, byte[] digest)
     using var rsa = cert.GetRSAPrivateKey()
         ?? throw new InvalidOperationException("Chave RSA indisponível");
     return rsa.SignHash(digest, HashAlgorithmName.SHA256,
-                        RSSignPortaturePadding.Pkcs1);
+                        RSASignaturePadding.Pkcs1);
 }
 ```
 
@@ -372,7 +389,7 @@ Manifesto nativo de exemplo (IDs fictícios a substituir):
 }
 ```
 
-Registrar valor padrão (REG_SZ, caminho absoluto do manifesto) em `HKCU\Software\Google\Chrome\NativeMessagingHosts\org.signport.nativehost` e `HKCU\Software\Microsoft\Edge\NativeMessagingHosts\org.signport.nativehost`; para instalação por máquina avaliar HKLM, ACL e arquitetura do registro. Instalador per-user deve usar diretório apropriado ao usuário, não Program Files sem privilégios. Validar IDs reais das lojas, binários e caminhos; remover registros na desinstalação. Assinar código e instalador, publicar checksums e releases autenticados. Distribuir extensão via Chrome Web Store e Edge Add-ons ou políticas empresariais autorizadas. Atualizações do host independentes da extensão, com compatibilidade de protocolo N/N-1, bloqueio de versões vulneráveis e rollback seguro. Taxas de loja, assinatura de código e regras de publicação devem ser confirmadas.
+Registrar valor padrão (REG_SZ, caminho absoluto do manifesto) em `HKCU\Software\Google\Chrome\NativeMessagingHosts\org.signport.nativehost` e `HKCU\Software\Microsoft\Edge\NativeMessagingHosts\org.signport.nativehost`; para instalação por máquina avaliar HKLM, ACL e arquitetura do registro. Instalador per-user deve usar diretório apropriado ao usuário, não Program Files sem privilégios. Validar IDs reais das lojas, binários e caminhos; remover registros na desinstalação. Instalador gerado com WiX Toolset/MSI, condicionado à validação dos termos da versão utilizada. Assinar código e instalador, publicar checksums e releases autenticados. Distribuir extensão via Chrome Web Store e Edge Add-ons ou políticas empresariais autorizadas. Atualizações do host independentes da extensão, com compatibilidade de protocolo N/N-1, bloqueio de versões vulneráveis e rollback seguro. Taxas de loja, assinatura de código e regras de publicação devem ser confirmadas.
 
 ### 8.8 UX e aceite
 
@@ -394,7 +411,8 @@ Escopos documentados: `single_signature`, `multi_signature`, `signature_session`
 
 ## 10. Segurança, LGPD e requisitos não funcionais
 
-- TLS em todos os enlaces; Engine sem exposição pública; firewall e credenciais distintas por serviço. Segredos fora do repositório, rotação, acessos mínimos e backups criptografados.
+- **Exceção explícita EXC-01 (27/11/2026, aprovada pelo mantenedor; altera a regra anterior de TLS em todos os enlaces):** Hub → Engine pode usar HTTP somente em desenvolvimento local em rede isolada e em testes automatizados em ambiente isolado e efêmero. Em produção, HTTPS/TLS é obrigatório e mTLS é suportado como proteção adicional, recomendada quando os serviços estão em hosts distintos. O Hub deve recusar iniciar em produção com `ENGINE_BASE_URL` `http://`. Em qualquer perfil o Engine exige autenticação entre serviços: TLS não substitui autorização.
+- TLS em todos os demais enlaces; Engine sem exposição pública; firewall e credenciais distintas por serviço. Segredos fora do repositório, rotação, acessos mínimos e backups criptografados.
 - RBAC e tenant scoping em queries, storage, jobs, websockets e webhooks; testes de IDOR; API rate limiting, CSRF para sessão web, CORS restrito, proteção XSS/CSP. Integrações externas não podem consentir em nome do titular por padrão.
 - Imutabilidade do original e do assinado, checksum antes/depois de cada etapa, versionamento de objetos, trilha append-only com exportação protegida. Não colocar segredos, CPF integral ou dados clínicos em logs, traces e métricas.
 - PDF é entrada não confiável: limites de bytes/páginas/tempo/memória; rejeitar arquivos malformados, criptografados sem fluxo explícito, PDFs com recursos ativos não permitidos; sandbox de parsing. Nunca normalizar PDF depois da assinatura. Bloquear SSRF em AIA/CRL/OCSP com egress controlado e limites.
@@ -438,23 +456,29 @@ Usar documentos sintéticos e certificados de teste; não subir laudos reais a s
 
 Monorepo inicial com módulos `hub`, `engine`, `extension`, `desktop` e SDKs (ver seção 17); contratos OpenAPI versionados e testes de compatibilidade. Ambientes dev/homolog/prod separados, credenciais e trust bundles distintos. Docker Compose inicial: caddy, hub-php, hub-worker, scheduler, engine, postgres, valkey; volume privado ou storage externo. Engine sem porta publicada. Pipeline CI executa testes, SAST, dependency scan, build, SBOM e assinatura de releases. Migrações backward-compatible e rollback ensaiado.
 
-Variáveis sugeridas (sem valores secretos): `ENGINE_BASE_URL`, `ENGINE_SERVICE_TOKEN`, `BIRDID_BASE_URL`, `BIRDID_CLIENT_ID`, `BIRDID_CLIENT_SECRET`, `BIRDID_REDIRECT_URI`, `SIGNING_PREPARATION_TTL`, `S3_BUCKET`, `TRUST_BUNDLE_VERSION`, `WEBHOOK_SIGNING_KEY`. Desktop recebe URL oficial do Hub, chaves públicas de autorização e configuração de ambiente autenticada; nenhum segredo global embutido. Hub mantém chave privada JWS separada da chave de webhook. Configurar `LOCAL_AUTH_SIGNING_KEY`, `LOCAL_AUTH_KEY_ID`, `LOCAL_AUTH_TTL`, IDs da extensão Chrome/Edge e versões mínimas por ambiente. CI adicional: build MV3, testes de mensagens, instalação em Windows, assinatura de binário e submissão às lojas.
+Variáveis sugeridas (sem valores secretos): `ENGINE_BASE_URL` (`http://` apenas em desenvolvimento/testes isolados, EXC-01 na seção 10), `ENGINE_SERVICE_TOKEN`, `BIRDID_BASE_URL`, `BIRDID_CLIENT_ID`, `BIRDID_CLIENT_SECRET`, `BIRDID_REDIRECT_URI`, `SIGNING_PREPARATION_TTL`, `S3_BUCKET`, `TRUST_BUNDLE_VERSION`, `WEBHOOK_SIGNING_KEY`. Desktop recebe URL oficial do Hub, chaves públicas de autorização e configuração de ambiente autenticada; nenhum segredo global embutido. Hub mantém chave privada JWS separada da chave de webhook. Configurar `LOCAL_AUTH_SIGNING_KEY`, `LOCAL_AUTH_KEY_ID`, `LOCAL_AUTH_TTL`, IDs da extensão Chrome/Edge e versões mínimas por ambiente. CI adicional: build MV3, testes de mensagens, instalação em Windows, assinatura de binário e submissão às lojas.
 
 Provisionamento inicial sugerido para testes: Hub e Engine em host 4 vCPU/8 GB com limites de recursos, storage externo e backup; produção dimensionada por benchmark, volume e SLA, não pela estimativa inicial. Não executar Engine como root. Separar serviços em hosts distintos quando carga ou risco justificar.
 
 ## 13. Roadmap e gates
 
+ROADMAP.md é a referência canônica da ordem de implementação (ADR-0013). Esta seção, a seção 21 e a seção 28 apenas detalham gates.
+
 | Fase | Entregas | Gate de saída |
 |---|---|---|
-| 0 — PoC criptográfica | pyHanko interrompido, RSA local, CMS e política RB | PDF sintético válido no ITI e retomada após restart |
-| 1 — Hub base | Tenants, usuários, apps, documentos, API, auditoria, filas | Testes de isolamento e idempotência |
-| 2 — Local | SDK, extensão MV3, Native Host, JWS, A1/A3 Windows, consentimento | Chrome/Edge e tokens reais homologados, instalador seguro e replay bloqueado |
-| 3 — Bird ID | Cadastro, OAuth, certificado, assinatura hash | Credenciais e condições comerciais confirmadas; PDF válido |
-| 4 — Integração clínica | API/webhooks, visualização, download, validação | Fluxo ponta a ponta com dados sintéticos |
-| 5 — Lotes e robustez | Lotes, reconciliação, observabilidade, ACT se exigida | Carga, falhas e segurança testadas |
-| 6 — Piloto | Operação controlada, runbooks, backup/restore | Aceite técnico, jurídico e operacional |
+| P0 — Protocol | OpenAPI 3.1, JSON Schema, envelope Native Messaging, claims de autorização, taxonomia de erros, fixtures sintéticas | Contratos validados em CI; testes positivos e negativos |
+| P1 — Engine PoC | pyHanko interrompido, RSA externo, CMS, política RB, retomada | PDF sintético válido, retomada após restart, relatório de política; ITI conforme seção 28 |
+| P1.5 — Authorization Foundation | Bootstrap Laravel em `apps/hub`, identidade da instalação, emissão/validação JWS, JWKS, persistência, consumo atômico, expiração, revogação, auditoria mínima | Testes de concorrência e replay; vinculação completa da autorização |
+| P2 — Desktop | Native Host .NET, A1/A3 Windows, consentimento, digest autorizado | Tokens reais, SoftHSM, VALIDAR |
+| P3 — Extension | MV3, Native Messaging, multi-instância, revogação | Chrome/Edge e testes de segurança da seção 27 |
+| P4 — SDK JS | Ponte browser e cliente REST | Integração sem segredos privilegiados |
+| P5 — Hub | Expansão da P1.5: tenants, documentos, workflow, API, auditoria, filas, webhooks, recuperação | Isolamento, idempotência e restauração |
+| P6 — Bird ID | Cadastro, OAuth, certificado, assinatura RAW | Credenciais e termos confirmados; PDF válido |
+| P7 — SDK PHP | Cliente PSR e exemplo externo | Testes de integração |
+| P8 — Distribuição | Compose, instalador WiX, artefatos assinados, SBOM, fonte correspondente | Instalação limpa, backup/restore |
+| P9 — Beta pública | Docs, revisão jurídica e de segurança, matriz de plataformas | Gates das seções 23 e 28 |
 
-A ordem reduz risco: provar interoperabilidade criptográfica antes de implementar toda a interface. MVP só é concluído quando P0, homologação e requisitos de segurança passam; se Bird ID não liberar credenciais, liberar piloto local separadamente sem anunciar suporte cloud.
+A ordem reduz risco: provar interoperabilidade criptográfica antes de implementar toda a interface. Lotes, reconciliação e observabilidade avançada (antiga fase "Lotes e robustez") e o piloto operacional são critérios das releases v0.5.0–v1.0.0 (seção 21). MVP só é concluído quando P0, homologação e requisitos de segurança passam; se Bird ID não liberar credenciais, liberar piloto local separadamente sem anunciar suporte cloud.
 
 ## 14. Pendências e decisões explícitas
 
@@ -492,7 +516,11 @@ A ordem reduz risco: provar interoperabilidade criptográfica antes de implement
 - Edge Native Messaging: https://learn.microsoft.com/en-us/microsoft-edge/extensions-chromium/developer-guide/native-messaging
 - WXT: https://wxt.dev/
 - JWS RFC 7515: https://www.rfc-editor.org/rfc/rfc7515
-- Inno Setup: https://jrsoftware.org/isinfo.php
+- JWA RFC 7518 (ES256 R||S, §3.4): https://www.rfc-editor.org/rfc/rfc7518
+- JCS RFC 8785: https://www.rfc-editor.org/rfc/rfc8785
+- I-JSON RFC 7493 (membros duplicados): https://www.rfc-editor.org/rfc/rfc7493
+- JWT BCP RFC 8725: https://www.rfc-editor.org/rfc/rfc8725
+- WiX Toolset: https://wixtoolset.org/ (instalador escolhido; termos da versão a validar). Inno Setup (https://jrsoftware.org/isinfo.php) permanece apenas como alternativa contingencial.
 
 
 ## 16. Estratégia open source e identidade
@@ -538,7 +566,7 @@ signport/
     sdk-php/              # SDK da API REST (fase posterior)
     protocol/             # JSON Schema e OpenAPI; fixtures neutras
   providers/              # contratos, documentação e módulos opcionais
-  infrastructure/         # compose, imagens, nginx, backups
+  infrastructure/         # compose, imagens, caddy (nginx alternativo), backups
   tests/                  # integração, criptografia e conformidade
   docs/                   # VitePress, pt-BR/en, ADRs
   .github/                # workflows, templates, CODEOWNERS
@@ -632,16 +660,16 @@ CI de PR não recebe segredos de produção nem credenciais Bird ID; builds de r
 
 ## 21. Roadmap público e entregáveis
 
-Versão da especificação 2.0 não corresponde a uma versão já publicada do software. Roadmap abaixo refina a seção 13; pode haver releases locais antes da integração cloud.
+Versão da especificação 2.0 não corresponde a uma versão já publicada do software. Roadmap abaixo mapeia as fases do ROADMAP.md (seção 13) em releases; pode haver releases locais antes da integração cloud.
 
 | Release | Entrega | Gate |
 |---|---|---|
-| v0.1.0 | PoC Engine: assinatura externa RSA, CMS, PAdES e retomada | PDF de teste validado, digest correto, relatório de política e testes negativos |
-| v0.2.0 | Native Signing: Desktop, Extension, SDK JS e Hub mínimo de autorização | A1/A3 real, consentimento, replay bloqueado, Chrome/Edge e instância independente |
-| v0.3.0 | Hub: tenants, documentos, API, auditoria, webhooks | Isolamento, idempotência, restauração e integração ponta a ponta |
-| v0.4.0 | Bird ID opcional | Credenciais, termos comerciais, autorização e validação de PDF reais |
-| v0.5.0 | Developer Platform: SDK PHP, exemplos, docs, lotes | Contratos versionados e testes de integração externos |
-| v0.9.0 | Beta pública: Compose, instalador, lojas, segurança | Instalação limpa, revisão de dependências, licenças e vulnerabilidades |
+| v0.1.0 | P0 + P1: Protocol v1 e PoC Engine — assinatura externa RSA, CMS, PAdES e retomada | PDF de teste validado, digest correto, relatório de política e testes negativos |
+| v0.2.0 | P1.5–P4: Authorization Foundation no Hub, Desktop, Extension e SDK JS | A1/A3 real, consentimento, replay bloqueado, Chrome/Edge e instância independente |
+| v0.3.0 | P5: Hub completo — tenants, documentos, API, auditoria, webhooks | Isolamento, idempotência, restauração e integração ponta a ponta |
+| v0.4.0 | P6: Bird ID opcional | Credenciais, termos comerciais, autorização e validação de PDF reais |
+| v0.5.0 | P7: Developer Platform — SDK PHP, exemplos, docs, lotes | Contratos versionados e testes de integração externos |
+| v0.9.0 | P8 + P9: Beta pública — Compose, instalador WiX, lojas, segurança | Instalação limpa, revisão de dependências, licenças e vulnerabilidades |
 | v1.0.0 | Estável | Gates P0, homologação, operação e documentação atendidos; suporte publicado |
 
 Gate anterior à primeira publicação pública: concluir a seção 23, remover segredos e dados privados, escolher titular e licença e publicar avisos aplicáveis. Não esperar v1.0.0 para revisar licenças. RT/carimbo de tempo fica após RB, salvo exigência normativa ou do tipo documental; CAdES/XAdES, múltiplos provedores, macOS/Linux/Firefox, CLI e eIDAS são backlog. Múltiplas assinaturas incrementais PAdES e lotes permanecem metas do MVP completo, sujeitas aos gates criptográficos e de segurança.
@@ -682,7 +710,7 @@ Apache-2.0 pode integrar obras GPLv3/AGPLv3, preservando suas condições; isso 
 | PostgreSQL | PostgreSQL License | Preservar avisos; checar extensões e imagem-base |
 | Redis | Redis 8+ oferece AGPLv3, RSALv2 ou SSPLv1; versões anteriores variam | Fixar versão e escolha de licença; avaliar Valkey (BSD-3-Clause) |
 | MinIO | Código comunitário AGPLv3; ofertas comerciais distintas | Não incluir por padrão sem revisão; avaliar storage local ou S3 externo |
-| Inno Setup/MSI | Termos variam conforme ferramenta/versão | Verificar uso comercial e redistribuição do instalador gerado; avaliar WiX |
+| WiX Toolset/MSI | Ferramenta escolhida; termos variam conforme versão | Verificar licença, uso comercial e redistribuição do instalador gerado antes da P8; Inno Setup apenas contingencial |
 | OpenSC, SoftHSM, OpenSSL e dependências nativas | Licenças diversas; verificar versões e linkage | Separar ferramentas de testes; revisar bibliotecas incluídas no binário |
 | Drivers de tokens | Termos do fabricante, frequentemente proprietários | Preferir instalação pelo usuário via fonte oficial; não redistribuir sem permissão |
 | Bird ID, ACT e lojas | Contratos de serviços, não licença do núcleo | Validar termos de integração, redistribuição, marcas e cobranças |
@@ -863,11 +891,11 @@ Organizar `app/Domain/{Identity,Tenancy,Documents,Signatures,Certificates,Provid
 
 FastAPI/Pydantic para contratos, Uvicorn para ASGI, pyHanko para PDF/CMS, pyhanko-certvalidator para cadeia e revogação, cryptography e asn1crypto para operações e estruturas existentes. HTTPX para chamadas externas permitidas; uv e uv.lock para resolução; Ruff, Pyright, Pytest e Hypothesis para qualidade. Dependências devem ser auditadas e fixadas. Engine não contém RBAC de usuários nem OAuth Bird ID.
 
-Organização: `src/signport_engine/{api,core,pdf,cms,cryptography,certificates,validation,timestamp,storage,policies/icp_brasil}`. API interna proposta: `POST /v1/pdf/prepare`, `/v1/pdf/complete`, `/v1/pdf/validate`, `/v1/certificates/inspect`, `/v1/certificates/validate`; `GET /v1/policies`, `/v1/capabilities`, `/health`, `/ready`. Harmonizar com contratos anteriores da seção 7 no OpenAPI antes de implementar. Persistir estado recuperável, sem pickle. Separar jobs CPU-bound e I/O; limitar páginas, bytes, tempo, concorrência e consultas externas. Não permitir URLs arbitrárias de documentos ou revogação sem controles de SSRF. Verificar digest dos atributos CMS, não assinar simplesmente SHA-256 do PDF completo. PoC deve testar assinatura externa, validação e política ICP-Brasil; Java DSS é fallback caso pyHanko não satisfaça os critérios. Bouncy Castle e Rust não são primeira escolha para montar todo o motor.
+Organização: `src/signport_engine/{api,core,pdf,cms,cryptography,certificates,validation,timestamp,storage,policies/icp_brasil}`. API interna canônica (ADR-0014): `POST /v1/pdf/preparations`, `GET /v1/pdf/preparations/{id}`, `POST /v1/pdf/preparations/{id}/complete`, `DELETE /v1/pdf/preparations/{id}`, `POST /v1/pdf/validations`, `GET /v1/pdf/validations/{id}`, `POST /v1/certificates/inspect`, `POST /v1/certificates/validate`, `GET /v1/policies`, `GET /v1/capabilities`, `GET /health/live`, `GET /health/ready`. O OpenAPI em `packages/protocol/openapi/engine.v1.yaml` é a fonte canônica; não há aliases legados. Persistir estado recuperável, sem pickle. Separar jobs CPU-bound e I/O; limitar páginas, bytes, tempo, concorrência e consultas externas. Não permitir URLs arbitrárias de documentos ou revogação sem controles de SSRF. Verificar digest dos atributos CMS, não assinar simplesmente SHA-256 do PDF completo. PoC deve testar assinatura externa, validação e política ICP-Brasil; Java DSS é fallback caso pyHanko não satisfaça os critérios. Bouncy Castle e Rust não são primeira escolha para montar todo o motor.
 
 ### 25.3 Desktop — Windows
 
-.NET 10 LTS e C# 14; `System.Security.Cryptography`, `X509Certificate2`, CurrentUser/My, CNG/CAPI como caminho primário, PKCS11Interop como fallback com módulos aprovados. `System.Text.Json`, `Microsoft.Extensions.Logging` (stderr/arquivo sanitizado), xUnit. Host console sob demanda; WPF mínimo para confirmação confiável, sem Electron, serviço residente ou porta local. Consentimento deve mostrar instância, finalidade, documento e certificado; não prometer prévia completa se não houver vínculo verificável com o documento preparado. WiX Toolset para MSI sujeito a revisão de versão/termos; registrar manifestos Chrome e Edge e seus IDs, suportar desinstalação. Driver instalado a partir de fonte oficial, nunca redistribuído sem direito. Publicação self-contained versus framework-dependent decidida por tamanho, patching e termos. Testar x64 e fallback x86 isolado. Futuro: Avalonia e adaptadores macOS/Linux. Rust/Go/Java foram considerados; .NET reduz esforço Windows, não garante compatibilidade de todos os tokens.
+.NET 10 LTS e C# 14; `System.Security.Cryptography`, `X509Certificate2`, CurrentUser/My, CNG/CAPI como caminho primário, PKCS11Interop como fallback com módulos aprovados. `System.Text.Json`, `Microsoft.Extensions.Logging` (stderr/arquivo sanitizado), xUnit. Host console sob demanda; WPF mínimo para confirmação confiável, sem Electron, serviço residente ou porta local. Consentimento deve mostrar instância, finalidade, documento e certificado; não prometer prévia completa se não houver vínculo verificável com o documento preparado. WiX Toolset/MSI é a ferramenta escolhida para o instalador, condicionada à validação dos termos da versão utilizada (Inno Setup apenas contingencial); registrar manifestos Chrome e Edge e seus IDs, suportar desinstalação. Driver instalado a partir de fonte oficial, nunca redistribuído sem direito. Publicação self-contained versus framework-dependent decidida por tamanho, patching e termos. Testar x64 e fallback x86 isolado. Futuro: Avalonia e adaptadores macOS/Linux. Rust/Go/Java foram considerados; .NET reduz esforço Windows, não garante compatibilidade de todos os tokens.
 
 ### 25.4 Extension — WXT
 
@@ -887,7 +915,7 @@ GitHub Actions: Pest/PHPUnit/Larastan, Pytest/Hypothesis/Pyright, xUnit, Vitest/
 
 ## 26. ADRs — decisões arquiteturais v2.2
 
-ADR-0001 permanece na seção 22. Os ADRs seguintes são decisões de projeto aprovadas como baseline, com gates técnicos ainda abertos. Alterações exigem novo ADR, não edição silenciosa da decisão histórica.
+ADR-0001 permanece na seção 22; ADR-0012 na seção 29; ADRs 0013 e 0014 na seção 30 e em `docs/architecture/`. Os ADRs seguintes são decisões de projeto aprovadas como baseline, com gates técnicos ainda abertos. Alterações exigem novo ADR, não edição silenciosa da decisão histórica.
 
 | ADR | Contexto e decisão | Alternativas / consequência | Gate |
 |---|---|---|---|
@@ -901,6 +929,8 @@ ADR-0001 permanece na seção 22. Os ADRs seguintes são decisões de projeto ap
 | 0009 | Filesystem privado default, S3 opcional | MinIO obrigatório rejeitado; volume local limita escala horizontal | Integridade, backup, acesso e restore |
 | 0010 | Compose + Caddy, observabilidade opcional | Kubernetes prematuro; instalação simples e independente | Instalação limpa, TLS, upgrade e rollback |
 | 0011 | SDKs leves Apache e adaptadores cloud no Hub AGPL | Acoplar SDK a framework ou Engine a OAuth rejeitado | Aplicação proprietária de exemplo via REST; Bird ID condicionado a termos |
+| 0013 | Authorization Foundation (P1.5) no Hub e ROADMAP.md canônico | Microsserviço de autorização ou stub rejeitados (seção 30) | Concorrência e replay em CI |
+| 0014 | API interna canônica do Engine | Rotas `/v1/preparations` e `/v1/pdf/prepare` descartadas sem alias (seção 30) | OpenAPI validado em CI |
 
 ## 27. Extensão multi-instância — modelo de confiança e requisitos
 
@@ -932,14 +962,17 @@ JWS deve vincular `iss/instance_id`, `aud`, `kid`, `jti`, `iat`, `exp`, `tenant_
 
 ## 28. Plano de execução e gates de fechamento
 
+A numeração segue ROADMAP.md (P0–P9, incluindo P1.5).
+
 | Ordem | Entrega | Evidência mínima |
 |---|---|---|
 | 1 | Protocol v1 | Schemas, fixtures, erros e contratos validados |
 | 2 | Engine PoC | PDF externo com certificado de laboratório, verificação independente e relatório de política |
+| 2.5 | Authorization Foundation (P1.5) | Hub mínimo: JWS, JWKS, consumo atômico, revogação, auditoria; testes de concorrência e replay |
 | 3 | Desktop | Certificado A3 real, consentimento, assinatura de digest CMS e PDF aceito no VALIDAR; testar A1 também |
 | 4 | Extension | Native Messaging e fluxo multi-instância em Chrome/Edge |
 | 5 | SDK JS | Integração browser demonstrável sem segredos privilegiados |
-| 6 | Hub | Tenancy, API, documentos, fila e auditoria; testes de recuperação |
+| 6 | Hub | Expansão da P1.5: tenancy, API, documentos, fila e auditoria; testes de recuperação |
 | 7 | Bird ID | OAuth e RAW em homologação, condições contratuais confirmadas |
 | 8 | SDK PHP | Cliente PSR e exemplo externo |
 | 9 | Infra | Compose em máquina limpa, backups/restauração, upgrade, SBOM |
@@ -952,13 +985,13 @@ JWS deve vincular `iss/instance_id`, `aud`, `kid`, `jti`, `iat`, `exp`, `tenant_
 - [ ] Validar Horizon/PhpRedis/Valkey, sem presumir certificação oficial; testar locks, retries, sessões, failover e idempotência.
 - [ ] Validar storage local/volume privado, S3 opcional, concorrência, retenção, backup e restauração.
 - [ ] Definir mecanismo de bootstrap confiável da chave de instância, testar onboarding, rotação, revogação e XSS; confirmar políticas Chrome/Edge.
-- [ ] Testar CNG/CAPI e PKCS#11 com tokens reais, middleware x64/x86, PIN, cancelamento e remoção; revisar WiX e distribuição do runtime.
+- [ ] Testar CNG/CAPI e PKCS#11 com tokens reais, middleware x64/x86, PIN, cancelamento e remoção; validar termos da versão do WiX Toolset e distribuição do runtime.
 - [ ] Confirmar termos Bird ID, BYOC, créditos, uso multi-tenant, autorização de publicação e homologação (seção 24); não bloquear core local por pendência cloud.
 - [ ] Definir titularidade, arquivos de licença por componente, direitos de redistribuição, Corresponding Source e notices; revisão jurídica quando necessária.
 - [ ] Revisar threat model, LGPD, confiança ICP-Brasil, segurança de artefatos e ausência de telemetria obrigatória.
 - [ ] Publicar somente capacidades comprovadas; não declarar homologação institucional ou compatibilidade universal sem evidências.
 
-**Estado:** especificação arquitetural v2.3; nenhum teste de runtime, hardware, compatibilidade ou auditoria jurídica foi executado nesta atualização. O objetivo continua sendo uma plataforma aberta, sem tarifa de assinatura imposta pelo SignPort, com serviços externos opcionais sujeitos aos respectivos custos e contratos.
+**Estado:** especificação arquitetural v2.3.1; nenhum teste de runtime, hardware, compatibilidade ou auditoria jurídica foi executado nesta atualização. O objetivo continua sendo uma plataforma aberta, sem tarifa de assinatura imposta pelo SignPort, com serviços externos opcionais sujeitos aos respectivos custos e contratos.
 
 
 ## 29. ADR-0012 — Identidade SignPort e governança inicial
@@ -972,3 +1005,11 @@ JWS deve vincular `iss/instance_id`, `aud`, `kid`, `jti`, `iat`, `exp`, `tenant_
 - Publicação inicial privada até o gate documental de direitos/licenças/marca; publicação pública pré-alpha permitida após esse gate, sem depender da homologação de produção. Gate de release funcional continua separado.
 - Preservar licenciamento híbrido, stack, contratos e requisitos criptográficos da v2.2. Não introduzir mudança de arquitetura implícita pela marca.
 - README EN/PT-BR deve distinguir objetivos de recursos implementados; não anunciar suporte ICP-Brasil homologado, disponibilidade Bird ID, ou instalação funcional antes da evidência.
+
+## 30. ADR-0013 e ADR-0014 — sequenciamento e contratos do Engine
+
+Registros completos em `docs/architecture/ADR-0013-authorization-foundation-and-sequencing.md` e `docs/architecture/ADR-0014-canonical-engine-api-contracts.md`.
+
+**ADR-0013 — Authorization Foundation and implementation sequencing.** Estado: aprovado em 27/11/2026. ROADMAP.md é a referência canônica da ordem de implementação. Nova fase P1.5 entre P1 e P2, dentro de `apps/hub` (sem novo microsserviço): bootstrap Laravel, identidade da instalação, emissão e validação JWS, publicação JWKS, persistência das autorizações, consumo online atômico de uso único, expiração, revogação, vinculação a preparação, digest, algoritmo, certificado, usuário, tenant e tentativa, auditoria mínima e testes de concorrência e replay. Endpoints: `GET /.well-known/jwks.json`, `GET /api/v1/instance`, `POST /api/v1/local/authorizations`, `POST /api/v1/local/authorizations/consume`, `POST /api/v1/local/authorizations/{id}/revoke`. Emissão exige sessão autenticada e contexto autorizado; consumo ocorre após consentimento local e antes da operação criptográfica. A P5 expande o mesmo Hub. A release v0.2.0 inclui a P1.5. Nenhum stub retorna sucesso falso.
+
+**ADR-0014 — Canonical Engine API contracts.** Estado: aprovado em 27/11/2026. A API interna do Engine é a listada na seção 25.2, especificada em `packages/protocol/openapi/engine.v1.yaml`, fonte canônica. As rotas propostas nas versões 2.2/2.3 (`/v1/preparations`, `/v1/pdf/prepare`, `/v1/pdf/complete`, `/v1/pdf/validate`, `/health`, `/ready`) são descartadas sem aliases, pois nenhuma API foi publicada. Campos de digest são nomeados por finalidade (`document_sha256`, `byte_range_digest_b64`, `signed_attributes_digest_b64`).

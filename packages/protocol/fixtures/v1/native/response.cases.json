@@ -1,0 +1,164 @@
+{
+  "schema": "https://signport.invalid/schemas/v1/native/response.schema.json",
+  "description": "Native Messaging response envelopes.",
+  "valid": [
+    {
+      "name": "success",
+      "data": {
+        "protocol": 1,
+        "requestId": "01936f3c-0000-7000-8000-00000000000b",
+        "success": true,
+        "result": {
+          "attemptId": "01936f3c-0000-7000-8000-000000000004",
+          "certificateSha256": "0d3c61a18544a97916ff01682072bba0f6ca447cd04e4b64c67075795529a35c",
+          "signatureAlgorithm": "RSA_PKCS1_V1_5",
+          "signatureB64": "pUOZfYTxJ5g1DAm97yzbFxv0HtPkpfgIry/rDFYmMAmlQ5l9hPEnmDUMCb3vLNsXG/Qe0+Sl+AivL+sMViYwCaVDmX2E8SeYNQwJve8s2xcb9B7T5KX4CK8v6wxWJjAJpUOZfYTxJ5g1DAm97yzbFxv0HtPkpfgIry/rDFYmMAmlQ5l9hPEnmDUMCb3vLNsXG/Qe0+Sl+AivL+sMViYwCaVDmX2E8SeYNQwJve8s2xcb9B7T5KX4CK8v6wxWJjAJpUOZfYTxJ5g1DAm97yzbFxv0HtPkpfgIry/rDFYmMAmlQ5l9hPEnmDUMCb3vLNsXG/Qe0+Sl+AivL+sMViYwCQ=="
+        }
+      }
+    },
+    {
+      "name": "failure",
+      "data": {
+        "protocol": 1,
+        "requestId": "01936f3c-0000-7000-8000-00000000000b",
+        "success": false,
+        "error": {
+          "code": "PIN_CANCELLED",
+          "message": "Operação cancelada pelo usuário.",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "name": "failure to unparsable request",
+      "data": {
+        "protocol": 1,
+        "requestId": null,
+        "success": false,
+        "error": {
+          "code": "INVALID_MESSAGE",
+          "message": "Mensagem inválida.",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "name": "version unsupported with supported list",
+      "data": {
+        "protocol": 1,
+        "requestId": null,
+        "success": false,
+        "error": {
+          "code": "VERSION_UNSUPPORTED",
+          "message": "Versão de protocolo não suportada.",
+          "retryable": false,
+          "supportedProtocolVersions": [
+            1
+          ]
+        }
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "success with error",
+      "base": 0,
+      "patch": [
+        {
+          "op": "add",
+          "path": "/error",
+          "value": {
+            "code": "PIN_CANCELLED",
+            "message": "Operação cancelada pelo usuário.",
+            "retryable": false
+          }
+        }
+      ],
+      "reason": "exactly one of result/error"
+    },
+    {
+      "name": "failure without error",
+      "base": 1,
+      "patch": [
+        {
+          "op": "remove",
+          "path": "/error"
+        }
+      ],
+      "reason": "error required"
+    },
+    {
+      "name": "success with null requestId",
+      "base": 0,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/requestId",
+          "value": null
+        }
+      ],
+      "reason": "success must correlate"
+    },
+    {
+      "name": "http-only error code",
+      "base": 1,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/error/code",
+          "value": "IDEMPOTENCY_CONFLICT"
+        }
+      ],
+      "reason": "native taxonomy only"
+    },
+    {
+      "name": "error with stack trace field",
+      "base": 1,
+      "patch": [
+        {
+          "op": "add",
+          "path": "/error/stack",
+          "value": "at Foo()"
+        }
+      ],
+      "reason": "closed error object"
+    },
+    {
+      "name": "message with control characters",
+      "base": 1,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/error/message",
+          "value": "line1\nline2"
+        }
+      ],
+      "reason": "display text"
+    },
+    {
+      "name": "version unsupported without supported list",
+      "base": 3,
+      "patch": [
+        {
+          "op": "remove",
+          "path": "/error/supportedProtocolVersions"
+        }
+      ],
+      "reason": "incompatibility must be diagnosable"
+    },
+    {
+      "name": "supported list on another error",
+      "base": 1,
+      "patch": [
+        {
+          "op": "add",
+          "path": "/error/supportedProtocolVersions",
+          "value": [
+            1
+          ]
+        }
+      ],
+      "reason": "only with VERSION_UNSUPPORTED"
+    }
+  ]
+}

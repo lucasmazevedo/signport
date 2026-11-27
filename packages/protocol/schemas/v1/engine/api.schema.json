@@ -1,0 +1,368 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://signport.invalid/schemas/v1/engine/api.schema.json",
+  "title": "Engine internal API bodies v1 (ADR-0014)",
+  "description": "Hub-to-Engine bodies. Three distinct values are never interchangeable: document_sha256 (hex, original PDF, audit), byte_range_digest_b64 (messageDigest attribute over the prepared PDF ByteRange) and signed_attributes_digest_b64 (SHA-256 of the DER signed attributes; input of the RSA operation). ICP-Brasil policy OIDs, attribute set and reservation sizes are PENDING the P1 PoC.",
+  "$defs": {
+    "PreparationStatus": {
+      "type": "string",
+      "enum": ["prepared", "completing", "completed", "cancelled", "expired", "failed"]
+    },
+    "CreatePreparationRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "document_version_id",
+        "storage_ref",
+        "document_sha256",
+        "certificate_der_b64",
+        "chain_der_b64",
+        "policy",
+        "digest_algorithm",
+        "signature_algorithm",
+        "expires_at"
+      ],
+      "properties": {
+        "document_version_id": { "$ref": "../common.schema.json#/$defs/Uuid" },
+        "storage_ref": { "$ref": "../common.schema.json#/$defs/StorageRef" },
+        "document_sha256": {
+          "description": "Expected SHA-256 of the stored original; the Engine recomputes and rejects divergence (DOCUMENT_HASH_MISMATCH).",
+          "$ref": "../common.schema.json#/$defs/Sha256Hex"
+        },
+        "certificate_der_b64": { "$ref": "../common.schema.json#/$defs/DerBase64" },
+        "chain_der_b64": { "$ref": "../common.schema.json#/$defs/CertificateChain" },
+        "policy": { "$ref": "../common.schema.json#/$defs/PolicyId" },
+        "digest_algorithm": { "$ref": "../common.schema.json#/$defs/DigestAlgorithm" },
+        "signature_algorithm": { "$ref": "../common.schema.json#/$defs/SignatureAlgorithm" },
+        "expires_at": { "$ref": "../common.schema.json#/$defs/Timestamp" }
+      }
+    },
+    "Preparation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "preparation_id",
+        "status",
+        "document_version_id",
+        "document_sha256",
+        "byte_range_digest_b64",
+        "signed_attributes_digest_b64",
+        "digest_algorithm",
+        "signature_algorithm",
+        "certificate_sha256",
+        "policy",
+        "created_at",
+        "expires_at"
+      ],
+      "properties": {
+        "preparation_id": { "$ref": "../common.schema.json#/$defs/Uuid" },
+        "status": { "$ref": "#/$defs/PreparationStatus" },
+        "document_version_id": { "$ref": "../common.schema.json#/$defs/Uuid" },
+        "document_sha256": { "$ref": "../common.schema.json#/$defs/Sha256Hex" },
+        "byte_range_digest_b64": { "$ref": "../common.schema.json#/$defs/Sha256Base64" },
+        "signed_attributes_digest_b64": { "$ref": "../common.schema.json#/$defs/Sha256Base64" },
+        "digest_algorithm": { "$ref": "../common.schema.json#/$defs/DigestAlgorithm" },
+        "signature_algorithm": { "$ref": "../common.schema.json#/$defs/SignatureAlgorithm" },
+        "certificate_sha256": { "$ref": "../common.schema.json#/$defs/Sha256Hex" },
+        "policy": { "$ref": "../common.schema.json#/$defs/PolicyId" },
+        "created_at": { "$ref": "../common.schema.json#/$defs/Timestamp" },
+        "expires_at": { "$ref": "../common.schema.json#/$defs/Timestamp" }
+      }
+    },
+    "CompletePreparationRequest": {
+      "description": "Idempotent per (preparation_id, attempt_id, signature_b64): repeating the same request returns the same result; a different signature or attempt for a completed preparation is a CONFLICT.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["attempt_id", "signature_b64", "signature_algorithm", "certificate_sha256"],
+      "properties": {
+        "attempt_id": { "$ref": "../common.schema.json#/$defs/Uuid" },
+        "signature_b64": { "$ref": "../common.schema.json#/$defs/RsaSignatureBase64" },
+        "signature_algorithm": { "$ref": "../common.schema.json#/$defs/SignatureAlgorithm" },
+        "certificate_sha256": { "$ref": "../common.schema.json#/$defs/Sha256Hex" }
+      }
+    },
+    "Artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_ref", "sha256", "size_bytes"],
+      "properties": {
+        "artifact_ref": { "$ref": "../common.schema.json#/$defs/StorageRef" },
+        "sha256": { "$ref": "../common.schema.json#/$defs/Sha256Hex" },
+        "size_bytes": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "CompletePreparationResponse": {
+      "description": "Signature verified against the bound certificate and signed attributes, CMS embedded. Publication still requires a successful validation report.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["preparation_id", "attempt_id", "status", "artifact"],
+      "properties": {
+        "preparation_id": { "$ref": "../common.schema.json#/$defs/Uuid" },
+        "attempt_id": { "$ref": "../common.schema.json#/$defs/Uuid" },
+        "status": { "const": "completed" },
+        "artifact": { "$ref": "#/$defs/Artifact" }
+      }
+    },
+    "CancelPreparationResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["preparation_id", "status"],
+      "properties": {
+        "preparation_id": { "$ref": "../common.schema.json#/$defs/Uuid" },
+        "status": { "const": "cancelled" }
+      }
+    },
+    "CreateValidationRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_ref", "expected_sha256"],
+      "properties": {
+        "artifact_ref": { "$ref": "../common.schema.json#/$defs/StorageRef" },
+        "expected_sha256": { "$ref": "../common.schema.json#/$defs/Sha256Hex" },
+        "expected_policy": { "$ref": "../common.schema.json#/$defs/PolicyId" },
+        "expected_certificate_sha256": { "$ref": "../common.schema.json#/$defs/Sha256Hex" }
+      }
+    },
+    "CheckStatus": {
+      "type": "string",
+      "enum": ["passed", "failed", "indeterminate", "not_applicable"]
+    },
+    "Check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": { "$ref": "#/$defs/CheckStatus" },
+        "code": {
+          "description": "Machine-readable reason, e.g. REVOCATION_SOURCE_UNAVAILABLE. Network failure of a revocation source is 'indeterminate', never 'passed'.",
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[A-Z][A-Z0-9_]*$"
+        }
+      }
+    },
+    "Decision": {
+      "description": "indeterminate blocks automatic publication (ENG-05).",
+      "type": "string",
+      "enum": ["valid", "invalid", "indeterminate"]
+    },
+    "SignatureChecks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["integrity", "coverage", "chain", "validity_period", "revocation", "key_usage", "policy", "timestamp", "modifications"],
+      "properties": {
+        "integrity": { "$ref": "#/$defs/Check" },
+        "coverage": { "$ref": "#/$defs/Check" },
+        "chain": { "$ref": "#/$defs/Check" },
+        "validity_period": { "$ref": "#/$defs/Check" },
+        "revocation": { "$ref": "#/$defs/Check" },
+        "key_usage": { "$ref": "#/$defs/Check" },
+        "policy": { "$ref": "#/$defs/Check" },
+        "timestamp": { "$ref": "#/$defs/Check" },
+        "modifications": { "$ref": "#/$defs/Check" }
+      }
+    },
+    "SignatureReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["field_name", "signer_certificate_sha256", "decision", "checks"],
+      "properties": {
+        "field_name": { "$ref": "../common.schema.json#/$defs/ShortText" },
+        "signer_certificate_sha256": { "$ref": "../common.schema.json#/$defs/Sha256Hex" },
+        "decision": { "$ref": "#/$defs/Decision" },
+        "checks": { "$ref": "#/$defs/SignatureChecks" }
+      }
+    },
+    "ValidationStatus": {
+      "type": "string",
+      "enum": ["pending", "completed", "failed"]
+    },
+    "ValidationReport": {
+      "description": "A cryptographically valid signature does not by itself imply ICP-Brasil compliance; 'policy' reports the configured local check only.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["validation_id", "status", "artifact_sha256", "decision", "signatures", "trust_bundle_version", "checked_at"],
+      "properties": {
+        "validation_id": { "$ref": "../common.schema.json#/$defs/Uuid" },
+        "status": { "$ref": "#/$defs/ValidationStatus" },
+        "artifact_sha256": { "$ref": "../common.schema.json#/$defs/Sha256Hex" },
+        "policy": { "$ref": "../common.schema.json#/$defs/PolicyId" },
+        "decision": {
+          "oneOf": [{ "$ref": "#/$defs/Decision" }, { "type": "null" }]
+        },
+        "signatures": {
+          "type": "array",
+          "maxItems": 100,
+          "items": { "$ref": "#/$defs/SignatureReport" }
+        },
+        "trust_bundle_version": { "$ref": "../common.schema.json#/$defs/ShortText" },
+        "checked_at": {
+          "oneOf": [{ "$ref": "../common.schema.json#/$defs/Timestamp" }, { "type": "null" }]
+        }
+      }
+    },
+    "ValidationAccepted": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["validation_id", "status"],
+      "properties": {
+        "validation_id": { "$ref": "../common.schema.json#/$defs/Uuid" },
+        "status": { "$ref": "#/$defs/ValidationStatus" }
+      }
+    },
+    "InspectCertificateRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["certificate_der_b64"],
+      "properties": {
+        "certificate_der_b64": { "$ref": "../common.schema.json#/$defs/DerBase64" }
+      }
+    },
+    "CertificateInfo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["certificate_sha256", "subject", "issuer", "serial_number_hex", "not_before", "not_after", "key", "key_usage"],
+      "properties": {
+        "certificate_sha256": { "$ref": "../common.schema.json#/$defs/Sha256Hex" },
+        "subject": { "$ref": "../common.schema.json#/$defs/DisplayText" },
+        "issuer": { "$ref": "../common.schema.json#/$defs/DisplayText" },
+        "serial_number_hex": { "type": "string", "pattern": "^[0-9a-f]{1,64}$" },
+        "not_before": { "$ref": "../common.schema.json#/$defs/Timestamp" },
+        "not_after": { "$ref": "../common.schema.json#/$defs/Timestamp" },
+        "key": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["algorithm", "size_bits"],
+          "properties": {
+            "algorithm": { "type": "string", "enum": ["RSA", "EC", "OTHER"] },
+            "size_bits": { "type": "integer", "minimum": 1, "maximum": 16384 }
+          }
+        },
+        "key_usage": {
+          "type": "array",
+          "uniqueItems": true,
+          "maxItems": 9,
+          "items": {
+            "type": "string",
+            "enum": ["digitalSignature", "nonRepudiation", "keyEncipherment", "dataEncipherment", "keyAgreement", "keyCertSign", "cRLSign", "encipherOnly", "decipherOnly"]
+          }
+        },
+        "icp_brasil_holder_cpf": {
+          "description": "SENSITIVE personal data, present only when the ICP-Brasil subject alternative name carries it. Must never be logged; Hub stores it encrypted/HMAC per SPEC §6. Extraction rules (OIDs) are PENDING the P1 PoC.",
+          "type": "string",
+          "pattern": "^[0-9]{11}$"
+        }
+      }
+    },
+    "ValidateCertificateRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["certificate_der_b64", "chain_der_b64"],
+      "properties": {
+        "certificate_der_b64": { "$ref": "../common.schema.json#/$defs/DerBase64" },
+        "chain_der_b64": { "$ref": "../common.schema.json#/$defs/CertificateChain" },
+        "validation_time": {
+          "description": "Defaults to now. Client-supplied roots are ignored: trust comes only from the versioned trust bundle.",
+          "$ref": "../common.schema.json#/$defs/Timestamp"
+        }
+      }
+    },
+    "CertificateValidation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["certificate_sha256", "decision", "checks", "trust_bundle_version", "checked_at"],
+      "properties": {
+        "certificate_sha256": { "$ref": "../common.schema.json#/$defs/Sha256Hex" },
+        "decision": { "$ref": "#/$defs/Decision" },
+        "checks": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["chain", "validity_period", "revocation", "key_usage"],
+          "properties": {
+            "chain": { "$ref": "#/$defs/Check" },
+            "validity_period": { "$ref": "#/$defs/Check" },
+            "revocation": { "$ref": "#/$defs/Check" },
+            "key_usage": { "$ref": "#/$defs/Check" }
+          }
+        },
+        "trust_bundle_version": { "$ref": "../common.schema.json#/$defs/ShortText" },
+        "checked_at": { "$ref": "../common.schema.json#/$defs/Timestamp" }
+      }
+    },
+    "Policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "signature_format", "requires_timestamp", "validation_status"],
+      "properties": {
+        "id": { "$ref": "../common.schema.json#/$defs/PolicyId" },
+        "name": { "$ref": "../common.schema.json#/$defs/ShortText" },
+        "signature_format": { "const": "PAdES" },
+        "requires_timestamp": { "type": "boolean" },
+        "policy_oid": {
+          "description": "Absent until confirmed against the DOC-ICP-15 version in force.",
+          "type": "string",
+          "pattern": "^[0-2](?:\\.(?:0|[1-9][0-9]*))+$"
+        },
+        "validation_status": {
+          "description": "Evidence level. 'experimental' = not yet validated externally; 'iti_validated_samples' = sample PDFs accepted by VALIDAR (not an institutional certification).",
+          "type": "string",
+          "enum": ["experimental", "iti_validated_samples"]
+        }
+      }
+    },
+    "PolicyList": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policies"],
+      "properties": {
+        "policies": { "type": "array", "maxItems": 50, "items": { "$ref": "#/$defs/Policy" } }
+      }
+    },
+    "Capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["engine_version", "api_version", "digest_algorithms", "signature_algorithms", "policies", "limits"],
+      "properties": {
+        "engine_version": { "$ref": "../common.schema.json#/$defs/SemVer" },
+        "api_version": { "const": "v1" },
+        "digest_algorithms": { "type": "array", "uniqueItems": true, "minItems": 1, "items": { "$ref": "../common.schema.json#/$defs/DigestAlgorithm" } },
+        "signature_algorithms": { "type": "array", "uniqueItems": true, "minItems": 1, "items": { "$ref": "../common.schema.json#/$defs/SignatureAlgorithm" } },
+        "policies": { "type": "array", "uniqueItems": true, "items": { "$ref": "../common.schema.json#/$defs/PolicyId" } },
+        "limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["max_pdf_bytes", "max_pdf_pages", "preparation_ttl_seconds"],
+          "properties": {
+            "max_pdf_bytes": { "type": "integer", "minimum": 1 },
+            "max_pdf_pages": { "type": "integer", "minimum": 1 },
+            "preparation_ttl_seconds": { "type": "integer", "minimum": 1, "maximum": 86400 }
+          }
+        }
+      }
+    },
+    "Liveness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": { "status": { "const": "ok" } }
+    },
+    "Readiness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "checks"],
+      "properties": {
+        "status": { "type": "string", "enum": ["ready", "not_ready"] },
+        "checks": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["storage", "trust_bundle", "state_store"],
+          "properties": {
+            "storage": { "type": "string", "enum": ["ok", "failing"] },
+            "trust_bundle": { "type": "string", "enum": ["ok", "failing"] },
+            "state_store": { "type": "string", "enum": ["ok", "failing"] }
+          }
+        }
+      }
+    }
+  }
+}

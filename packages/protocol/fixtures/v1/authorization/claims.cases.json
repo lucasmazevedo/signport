@@ -1,0 +1,191 @@
+{
+  "schema": "https://signport.invalid/schemas/v1/authorization/claims.schema.json",
+  "description": "JWS claims (synthetic). consent_manifest_sha256 = SHA-256 of RFC 8785 JCS of consent; verified by tests.",
+  "valid": [
+    {
+      "name": "single signHash",
+      "data": {
+        "iss": "https://hub.example.invalid",
+        "aud": "org.signport.nativehost",
+        "iat": 1795780800,
+        "nbf": 1795780800,
+        "exp": 1795780920,
+        "jti": "01936f3c-0000-7000-8000-000000000009",
+        "instance_id": "01936f3c-0000-7000-8000-000000000008",
+        "tenant_id": "01936f3c-0000-7000-8000-000000000001",
+        "user_id": "01936f3c-0000-7000-8000-000000000002",
+        "transaction_id": "01936f3c-0000-7000-8000-000000000003",
+        "attempt_id": "01936f3c-0000-7000-8000-000000000004",
+        "preparation_id": "01936f3c-0000-7000-8000-000000000005",
+        "origin": "https://hub.example.invalid",
+        "document": {
+          "document_id": "01936f3c-0000-7000-8000-000000000006",
+          "version_id": "01936f3c-0000-7000-8000-000000000007",
+          "document_sha256": "93b5d4f9dd9cd6512f1857fee0ae17b5a0f5f720b2a217f8deaaa4df0b4f2f9a"
+        },
+        "certificate_sha256": "0d3c61a18544a97916ff01682072bba0f6ca447cd04e4b64c67075795529a35c",
+        "signed_attributes_digest_b64": "//0rVG4gB7nrYwgVR0XZn5PfJlNXUS9vUn5kzLY9NAc=",
+        "digest_algorithm": "SHA-256",
+        "signature_algorithm": "RSA_PKCS1_V1_5",
+        "purpose": "Assinatura de laudo",
+        "consent": {
+          "manifest_version": 1,
+          "instance": {
+            "instance_id": "01936f3c-0000-7000-8000-000000000008",
+            "name": "SignPort Teste Sintético",
+            "origin": "https://hub.example.invalid"
+          },
+          "purpose": "Assinatura de laudo",
+          "signer": {
+            "display_name": "Titular Sintético"
+          },
+          "document": {
+            "title": "Laudo sintético 001",
+            "version_number": 1,
+            "document_sha256": "93b5d4f9dd9cd6512f1857fee0ae17b5a0f5f720b2a217f8deaaa4df0b4f2f9a"
+          },
+          "certificate": {
+            "subject": "CN=TITULAR SINTETICO DE TESTE, O=SignPort Test",
+            "certificate_sha256": "0d3c61a18544a97916ff01682072bba0f6ca447cd04e4b64c67075795529a35c"
+          },
+          "item_count": 1
+        },
+        "consent_manifest_sha256": "ac130ae3130d4188c495d85538685c391fe213bd3a75422ac225cb46b21cc447"
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "missing jti",
+      "base": 0,
+      "patch": [
+        {
+          "op": "remove",
+          "path": "/jti"
+        }
+      ],
+      "reason": "replay protection"
+    },
+    {
+      "name": "missing expiration",
+      "base": 0,
+      "patch": [
+        {
+          "op": "remove",
+          "path": "/exp"
+        }
+      ],
+      "reason": "expiration required"
+    },
+    {
+      "name": "wrong audience",
+      "base": 0,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/aud",
+          "value": "https://hub.example.invalid"
+        }
+      ],
+      "reason": "audience is the native host"
+    },
+    {
+      "name": "audience array",
+      "base": 0,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/aud",
+          "value": [
+            "org.signport.nativehost"
+          ]
+        }
+      ],
+      "reason": "single fixed audience"
+    },
+    {
+      "name": "document hash as signed digest",
+      "base": 0,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/signed_attributes_digest_b64",
+          "value": "93b5d4f9dd9cd6512f1857fee0ae17b5a0f5f720b2a217f8deaaa4df0b4f2f9a"
+        }
+      ],
+      "reason": "digest confusion"
+    },
+    {
+      "name": "document hash in base64",
+      "base": 0,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/document/document_sha256",
+          "value": "k7XU+d2c1lEvGFf+4K4XtaD19yCyohf43qqk3wtPL5o="
+        }
+      ],
+      "reason": "document hash is hex"
+    },
+    {
+      "name": "missing certificate binding",
+      "base": 0,
+      "patch": [
+        {
+          "op": "remove",
+          "path": "/certificate_sha256"
+        }
+      ],
+      "reason": "certificate binding required"
+    },
+    {
+      "name": "missing tenant",
+      "base": 0,
+      "patch": [
+        {
+          "op": "remove",
+          "path": "/tenant_id"
+        }
+      ],
+      "reason": "tenant binding required"
+    },
+    {
+      "name": "embedded key",
+      "base": 0,
+      "patch": [
+        {
+          "op": "add",
+          "path": "/jwk",
+          "value": {
+            "kty": "EC"
+          }
+        }
+      ],
+      "reason": "no keys in claims"
+    },
+    {
+      "name": "batch list",
+      "base": 0,
+      "patch": [
+        {
+          "op": "add",
+          "path": "/items",
+          "value": []
+        }
+      ],
+      "reason": "protocol 1 single item"
+    },
+    {
+      "name": "float timestamp",
+      "base": 0,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/exp",
+          "value": 1795780920.5
+        }
+      ],
+      "reason": "NumericDate integer"
+    }
+  ]
+}

@@ -1,0 +1,84 @@
+{
+  "schema": "https://signport.invalid/schemas/v1/engine/api.schema.json#/$defs/CreatePreparationRequest",
+  "description": "POST /v1/pdf/preparations request.",
+  "valid": [
+    {
+      "name": "rb policy",
+      "data": {
+        "document_version_id": "01936f3c-0000-7000-8000-000000000007",
+        "storage_ref": "tenants/01936f3c-0000-7000-8000-000000000001/documents/01936f3c-0000-7000-8000-000000000007.pdf",
+        "document_sha256": "93b5d4f9dd9cd6512f1857fee0ae17b5a0f5f720b2a217f8deaaa4df0b4f2f9a",
+        "certificate_der_b64": "MIIBClNZTlRIRVRJQy1OT1QtQS1SRUFMLUNFUlRJRklDQVRFLVNDSEVNQS1GSVhUVVJFLU9OTFk=",
+        "chain_der_b64": [
+          "MIIBClNZTlRIRVRJQy1JTlRFUk1FRElBVEUtQ0EtU0NIRU1BLUZJWFRVUkUtT05MWQ=="
+        ],
+        "policy": "icpbr-pades-rb",
+        "digest_algorithm": "SHA-256",
+        "signature_algorithm": "RSA_PKCS1_V1_5",
+        "expires_at": "2026-11-27T12:10:00Z"
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "storage url",
+      "base": 0,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/storage_ref",
+          "value": "https://evil.example.invalid/a.pdf"
+        }
+      ],
+      "reason": "SSRF: never URLs"
+    },
+    {
+      "name": "inline PDF",
+      "base": 0,
+      "patch": [
+        {
+          "op": "add",
+          "path": "/pdf_b64",
+          "value": "JVBERi0xLjcK"
+        }
+      ],
+      "reason": "documents only by authorized reference"
+    },
+    {
+      "name": "client trust anchor",
+      "base": 0,
+      "patch": [
+        {
+          "op": "add",
+          "path": "/trust_anchor_der_b64",
+          "value": "MIIBClNZTlRIRVRJQy1OT1QtQS1SRUFMLUNFUlRJRklDQVRFLVNDSEVNQS1GSVhUVVJFLU9OTFk="
+        }
+      ],
+      "reason": "never trust client-supplied roots"
+    },
+    {
+      "name": "unknown policy",
+      "base": 0,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/policy",
+          "value": "pades-baseline-b"
+        }
+      ],
+      "reason": "RB is not generic Baseline B"
+    },
+    {
+      "name": "sha1",
+      "base": 0,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/digest_algorithm",
+          "value": "SHA-1"
+        }
+      ],
+      "reason": "SHA-256 only"
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "schema": "https://signport.invalid/schemas/v1/authorization/api.schema.json#/$defs/IssueAuthorizationResponse",
+  "description": "POST /api/v1/local/authorizations response.",
+  "valid": [
+    {
+      "name": "issued",
+      "data": {
+        "authorization_id": "01936f3c-0000-7000-8000-00000000000a",
+        "attempt_id": "01936f3c-0000-7000-8000-000000000004",
+        "jws": "eyJhbGciOiJFUzI1NiJ9.eyJzeW50aGV0aWMiOnRydWV9.c3ludGhldGljLXNpZ25hdHVyZS1ub3QtdmFsaWQ",
+        "kid": "2026-11-a",
+        "expires_at": "2026-11-27T12:02:00Z",
+        "consent": {
+          "manifest_version": 1,
+          "instance": {
+            "instance_id": "01936f3c-0000-7000-8000-000000000008",
+            "name": "SignPort Teste Sintético",
+            "origin": "https://hub.example.invalid"
+          },
+          "purpose": "Assinatura de laudo",
+          "signer": {
+            "display_name": "Titular Sintético"
+          },
+          "document": {
+            "title": "Laudo sintético 001",
+            "version_number": 1,
+            "document_sha256": "93b5d4f9dd9cd6512f1857fee0ae17b5a0f5f720b2a217f8deaaa4df0b4f2f9a"
+          },
+          "certificate": {
+            "subject": "CN=TITULAR SINTETICO DE TESTE, O=SignPort Test",
+            "certificate_sha256": "0d3c61a18544a97916ff01682072bba0f6ca447cd04e4b64c67075795529a35c"
+          },
+          "item_count": 1
+        }
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "missing consent",
+      "base": 0,
+      "patch": [
+        {
+          "op": "remove",
+          "path": "/consent"
+        }
+      ],
+      "reason": "manifest required"
+    }
+  ]
+}

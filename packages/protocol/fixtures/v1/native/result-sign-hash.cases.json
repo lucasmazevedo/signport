@@ -1,0 +1,41 @@
+{
+  "schema": "https://signport.invalid/schemas/v1/native/results.schema.json#/$defs/SignHashResult",
+  "description": "signHash result. Signature bytes are a synthetic placeholder (see crypto vectors for a verifiable one).",
+  "valid": [
+    {
+      "name": "rsa-2048",
+      "data": {
+        "attemptId": "01936f3c-0000-7000-8000-000000000004",
+        "certificateSha256": "0d3c61a18544a97916ff01682072bba0f6ca447cd04e4b64c67075795529a35c",
+        "signatureAlgorithm": "RSA_PKCS1_V1_5",
+        "signatureB64": "pUOZfYTxJ5g1DAm97yzbFxv0HtPkpfgIry/rDFYmMAmlQ5l9hPEnmDUMCb3vLNsXG/Qe0+Sl+AivL+sMViYwCaVDmX2E8SeYNQwJve8s2xcb9B7T5KX4CK8v6wxWJjAJpUOZfYTxJ5g1DAm97yzbFxv0HtPkpfgIry/rDFYmMAmlQ5l9hPEnmDUMCb3vLNsXG/Qe0+Sl+AivL+sMViYwCaVDmX2E8SeYNQwJve8s2xcb9B7T5KX4CK8v6wxWJjAJpUOZfYTxJ5g1DAm97yzbFxv0HtPkpfgIry/rDFYmMAmlQ5l9hPEnmDUMCb3vLNsXG/Qe0+Sl+AivL+sMViYwCQ=="
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "too short for RSA-2048",
+      "base": 0,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/signatureB64",
+          "value": "//0rVG4gB7nrYwgVR0XZn5PfJlNXUS9vUn5kzLY9NAc="
+        }
+      ],
+      "reason": "raw signature must match modulus length"
+    },
+    {
+      "name": "CMS wrapper returned",
+      "base": 0,
+      "patch": [
+        {
+          "op": "add",
+          "path": "/cmsB64",
+          "value": "MIIBClNZTlRIRVRJQy1OT1QtQS1SRUFMLUNFUlRJRklDQVRFLVNDSEVNQS1GSVhUVVJFLU9OTFk="
+        }
+      ],
+      "reason": "raw signature only"
+    }
+  ]
+}

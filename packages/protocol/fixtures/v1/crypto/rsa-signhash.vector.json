@@ -1,0 +1,11 @@
+{
+  "description": "Known-answer vector for \"no double hashing\" (SPEC §5). signature_b64 = RSASSA-PKCS1-v1_5/SHA-256 over message, i.e. SignHash(digest_b64). double_hashed_signature_b64 = SignData(digest) and MUST be rejected as a signature of message. Synthetic ephemeral key; private key discarded.",
+  "algorithm": "RSA_PKCS1_V1_5",
+  "digest_algorithm": "SHA-256",
+  "modulus_bits": 2048,
+  "public_key_spki_der_b64": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0T+xsEk1lKfCce958XgutjolMfSAqVY14Xt7C1z0mTwVJubMsIq8C+Ygmpe9tifokfwTRp7HzwZ/+slLiFakdaX5T286U32ZxxsIABsr0T3E0DraBgwqnnwvH/7eclG3LhXMOUWMCFF9CoZQoAIuJWDHhOlVwycrmGHymbMjc58fqQESc3PaCyCNzQH5Qw/wlx5jHCGih6nNF5tTFSfr3Pu7G5KDHlUEnIWgNHBSkxVhmsJwOL7y5Zx8DdcWtNU+zyyo2m8g2qDObOR7LPJg2v+TWy9Q/IXqW65pvsGmG7h34+pnd37tGz3/y/sCfOyl6rLnWx6uKUbGP/dj1tXrlwIDAQAB",
+  "message_b64": "U1lOVEhFVElDIHN0YW5kLWluIGZvciBERVItZW5jb2RlZCBDTVMgc2lnbmVkIGF0dHJpYnV0ZXMgKFAwIHZlY3Rvciwgbm90IGEgcmVhbCBDTVMpLg==",
+  "digest_b64": "WLjugZ0kT732VS9yUhCLn1kkp4egcRv7KrvLagmcDkg=",
+  "signature_b64": "isFdyWEWHlHs8PfWpK4a3US4GWF4uioKVZZz90VfIswxOdy9/uNm2RpWUVYKeM2L2iYzWHuMQkKszYn9THMPydSXqqxc9t9he2MOsPlO9p5MJr5QCDOOsR5xdsFpsHpSgsxi8D6asXjX2u6ZX6nygTHSxPBPCOx5XdedkX6HIqefda47L+DOqfq2kzJI8NFg579qUidjQjJf05yJSM33Pa14JwwZ7FQj/DUJIPTBdacpijjYRp0ih3LE8CjyS9yqlrgeUEkAwBPhyjVVkCq/Zl2OFOR7AO06FnhlxhV3nTzJHC79za/oBWdDY6DZTxkwX/+bkIEQRDEbjf+Mc5YRXQ==",
+  "double_hashed_signature_b64": "EpeaYx1he8WtTuzkPBbFyLTdNEcyxtGAaWyyftsc0Esw/TuhLouoCvzuFsOMeJtfcPd+9GxE3rj3KUJUPqYMFdTnFULPGERbVQ7PY0g7qW/NOXpslTNBG7QH+utr4W7CLVwHag0ZO6OPA3MMqOijcd3AqMhJw/Wbj2am4j1amaMC5gbohbqAakmrFDxu1Y8r4/hisBtucZWl9HUJZe933VIEmtfBW2X0/cm1fK826wNfTGxt7N2jMxBkavYGI7QxRev47urQvUqAmWsY8f2oMkkAPgZy59IshnmV3/FyOJm/yWCAuefEZc22Mc4iKqwrTGQP98xU2gjNk8tLX6BBOQ=="
+}

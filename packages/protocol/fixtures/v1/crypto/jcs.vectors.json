@@ -1,0 +1,29 @@
+{
+  "description": "RFC 8785 (JCS) cross-language vectors. Every implementation (PHP Hub, .NET Desktop, JS tests) must produce canonical exactly and the same SHA-256 over its UTF-8 bytes.",
+  "cases": [
+    {
+      "name": "RFC 8785 §3.2.4 example (numbers, escapes, literals)",
+      "input_json": "{\"numbers\":[333333333.33333329,1E30,4.50,2e-3,0.000000000000000000000000001],\"string\":\"\\u20ac$\\u000F\\u000aA'\\u0042\\u0022\\u005c\\\\\\\"\\/\",\"literals\":[null,true,false]}",
+      "canonical": "{\"literals\":[null,true,false],\"numbers\":[333333333.3333333,1e+30,4.5,0.002,1e-27],\"string\":\"€$\\u000f\\nA'B\\\"\\\\\\\\\\\"/\"}",
+      "canonical_utf8_sha256": "2d5e01a318d0f0879ab568c4be289c8b1f64ef8921a53c6277d5e069978baacb"
+    },
+    {
+      "name": "RFC 8785 §3.2.3 sorting by UTF-16 code units",
+      "input_json": "{\"\\u20ac\":\"Euro Sign\",\"\\r\":\"Carriage Return\",\"\\ufb33\":\"Hebrew Letter Dalet With Dagesh\",\"1\":\"One\",\"\\ud83d\\ude00\":\"Emoji: Grinning Face\",\"\\u0080\":\"Control\",\"\\u00f6\":\"Latin Small Letter O With Diaeresis\"}",
+      "canonical": "{\"\\r\":\"Carriage Return\",\"1\":\"One\",\"\":\"Control\",\"ö\":\"Latin Small Letter O With Diaeresis\",\"€\":\"Euro Sign\",\"😀\":\"Emoji: Grinning Face\",\"דּ\":\"Hebrew Letter Dalet With Dagesh\"}",
+      "canonical_utf8_sha256": "5e321556d22018a9656991a9e94f77ec175fa193e52a2429d312f8419ec8b08c"
+    },
+    {
+      "name": "nested objects and arrays keep array order",
+      "input_json": "[56,{\"d\":true,\"10\":null,\"1\":[]}]",
+      "canonical": "[56,{\"1\":[],\"10\":null,\"d\":true}]",
+      "canonical_utf8_sha256": "099601b171cafed97c333f8878d68e7f8c8f795412adb34b2fdcf0e7c7beac42"
+    },
+    {
+      "name": "consent manifest fixture",
+      "input_json": "{\"manifest_version\":1,\"instance\":{\"instance_id\":\"01936f3c-0000-7000-8000-000000000008\",\"name\":\"SignPort Teste Sintético\",\"origin\":\"https://hub.example.invalid\"},\"purpose\":\"Assinatura de laudo\",\"signer\":{\"display_name\":\"Titular Sintético\"},\"document\":{\"title\":\"Laudo sintético 001\",\"version_number\":1,\"document_sha256\":\"93b5d4f9dd9cd6512f1857fee0ae17b5a0f5f720b2a217f8deaaa4df0b4f2f9a\"},\"certificate\":{\"subject\":\"CN=TITULAR SINTETICO DE TESTE, O=SignPort Test\",\"certificate_sha256\":\"0d3c61a18544a97916ff01682072bba0f6ca447cd04e4b64c67075795529a35c\"},\"item_count\":1}",
+      "canonical": "{\"certificate\":{\"certificate_sha256\":\"0d3c61a18544a97916ff01682072bba0f6ca447cd04e4b64c67075795529a35c\",\"subject\":\"CN=TITULAR SINTETICO DE TESTE, O=SignPort Test\"},\"document\":{\"document_sha256\":\"93b5d4f9dd9cd6512f1857fee0ae17b5a0f5f720b2a217f8deaaa4df0b4f2f9a\",\"title\":\"Laudo sintético 001\",\"version_number\":1},\"instance\":{\"instance_id\":\"01936f3c-0000-7000-8000-000000000008\",\"name\":\"SignPort Teste Sintético\",\"origin\":\"https://hub.example.invalid\"},\"item_count\":1,\"manifest_version\":1,\"purpose\":\"Assinatura de laudo\",\"signer\":{\"display_name\":\"Titular Sintético\"}}",
+      "canonical_utf8_sha256": "ac130ae3130d4188c495d85538685c391fe213bd3a75422ac225cb46b21cc447"
+    }
+  ]
+}

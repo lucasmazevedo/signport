@@ -1,0 +1,50 @@
+{
+  "schema": "https://signport.invalid/schemas/v1/authorization/api.schema.json#/$defs/IssueAuthorizationRequest",
+  "description": "POST /api/v1/local/authorizations request.",
+  "valid": [
+    {
+      "name": "attempt only",
+      "data": {
+        "attempt_id": "01936f3c-0000-7000-8000-000000000004"
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "client-supplied digest",
+      "base": 0,
+      "patch": [
+        {
+          "op": "add",
+          "path": "/signed_attributes_digest_b64",
+          "value": "//0rVG4gB7nrYwgVR0XZn5PfJlNXUS9vUn5kzLY9NAc="
+        }
+      ],
+      "reason": "bindings are derived server-side"
+    },
+    {
+      "name": "client-supplied tenant",
+      "base": 0,
+      "patch": [
+        {
+          "op": "add",
+          "path": "/tenant_id",
+          "value": "01936f3c-0000-7000-8000-000000000001"
+        }
+      ],
+      "reason": "tenant from session only"
+    },
+    {
+      "name": "client-supplied ttl",
+      "base": 0,
+      "patch": [
+        {
+          "op": "add",
+          "path": "/ttl_seconds",
+          "value": 86400
+        }
+      ],
+      "reason": "TTL is server policy"
+    }
+  ]
+}

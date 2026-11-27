@@ -1,0 +1,198 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://signport.invalid/schemas/v1/native/request.schema.json",
+  "title": "Native Messaging request, protocol 1",
+  "description": "Message sent by the extension to the native host (SPEC §8.4). UTF-8 JSON, framed by a uint32 length prefix in native byte order; maximum 262144 bytes (256 KiB) per message, checked before allocation. Closed schema: unknown fields, unknown actions and PDFs are rejected. 'signBatch' is reserved and NOT part of protocol 1. Negotiation: the extension first sends getVersion with protocol 1 (frozen forever) and selects the highest common protocol from supportedProtocolVersions; on mismatch the host answers VERSION_UNSUPPORTED with supportedProtocolVersions.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "protocol",
+    "requestId",
+    "action",
+    "payload"
+  ],
+  "properties": {
+    "protocol": {
+      "const": 1
+    },
+    "requestId": {
+      "$ref": "../common.schema.json#/$defs/Uuid"
+    },
+    "action": {
+      "$ref": "#/$defs/Action"
+    },
+    "payload": {
+      "type": "object"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "getVersion"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/EmptyPayload"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "getCapabilities"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/EmptyPayload"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "listCertificates"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/ListCertificatesPayload"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "readCertificate"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/ReadCertificatePayload"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "signHash"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/SignHashPayload"
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "Action": {
+      "type": "string",
+      "enum": [
+        "getVersion",
+        "getCapabilities",
+        "listCertificates",
+        "readCertificate",
+        "signHash"
+      ]
+    },
+    "EmptyPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {}
+    },
+    "ListCertificatesPayload": {
+      "description": "Restricted filters only. Store is always CurrentUser/My, read-only; certificates without an associated private key are never listed.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "includeExpired": {
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "ReadCertificatePayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "certificateSha256"
+      ],
+      "properties": {
+        "certificateSha256": {
+          "$ref": "../common.schema.json#/$defs/Sha256Hex"
+        }
+      }
+    },
+    "SignHashPayload": {
+      "description": "Sign the SHA-256 digest of the DER-encoded CMS signed attributes prepared by the Engine. NOT the hash of the PDF and NOT the ByteRange digest. The host must: verify the JWS against a locally trusted instance key; check that every field below equals the corresponding claim; show native consent; consume the authorization online; re-read the certificate and compare its fingerprint; then call SignHash once (no double hashing).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attemptId",
+        "signedAttributesDigestB64",
+        "digestAlgorithm",
+        "signatureAlgorithm",
+        "certificateSha256",
+        "authorization"
+      ],
+      "properties": {
+        "attemptId": {
+          "$ref": "../common.schema.json#/$defs/Uuid"
+        },
+        "signedAttributesDigestB64": {
+          "$ref": "../common.schema.json#/$defs/Sha256Base64"
+        },
+        "digestAlgorithm": {
+          "$ref": "../common.schema.json#/$defs/DigestAlgorithm"
+        },
+        "signatureAlgorithm": {
+          "$ref": "../common.schema.json#/$defs/SignatureAlgorithm"
+        },
+        "certificateSha256": {
+          "$ref": "../common.schema.json#/$defs/Sha256Hex"
+        },
+        "authorization": {
+          "$ref": "../common.schema.json#/$defs/CompactJws"
+        }
+      }
+    }
+  }
+}

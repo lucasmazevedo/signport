@@ -1,0 +1,67 @@
+{
+  "schema": "https://signport.invalid/schemas/v1/errors.schema.json#/$defs/HttpError",
+  "description": "HTTP error body.",
+  "valid": [
+    {
+      "name": "replay",
+      "data": {
+        "code": "REPLAY",
+        "message": "Autorização já utilizada.",
+        "correlation_id": "01936f3c-0000-7000-8000-00000000000d",
+        "retryable": false
+      }
+    },
+    {
+      "name": "validation with details",
+      "data": {
+        "code": "VALIDATION_FAILED",
+        "message": "Dados inválidos.",
+        "correlation_id": "01936f3c-0000-7000-8000-00000000000d",
+        "retryable": false,
+        "details": [
+          {
+            "pointer": "/attempt_id",
+            "reason": "invalid uuid"
+          }
+        ]
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "stack trace",
+      "base": 0,
+      "patch": [
+        {
+          "op": "add",
+          "path": "/trace",
+          "value": "Illuminate\\..."
+        }
+      ],
+      "reason": "no stack traces"
+    },
+    {
+      "name": "native-only code",
+      "base": 0,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/code",
+          "value": "PIN_BLOCKED"
+        }
+      ],
+      "reason": "HTTP taxonomy only"
+    },
+    {
+      "name": "missing correlation",
+      "base": 0,
+      "patch": [
+        {
+          "op": "remove",
+          "path": "/correlation_id"
+        }
+      ],
+      "reason": "correlation required"
+    }
+  ]
+}

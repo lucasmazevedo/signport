@@ -1,12 +1,15 @@
 name: Scaffold checks
 on: [push, pull_request]
+# Least privilege; no secrets are used. Never switch to pull_request_target.
 permissions:
   contents: read
 jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Required documentation
         run: |
           test -s SPEC.md
@@ -17,3 +20,24 @@ jobs:
           for d in apps/{hub,engine,desktop,extension} packages/{sdk-js,sdk-php,protocol} providers/birdid; do
             test -s "$d/AGENTS.md" || exit 1
           done
+  protocol:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: packages/protocol
+    steps:
+      # Actions pinned by full commit SHA (SPEC §20); update via Dependabot/Renovate with review.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22.19.0'
+          package-manager-cache: false
+      - name: Enable pnpm pinned by packageManager
+        run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - name: OpenAPI lint and contract tests
+        run: pnpm run check
