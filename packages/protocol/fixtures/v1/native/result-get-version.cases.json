@@ -1,0 +1,101 @@
+{
+  "schema": "https://signport.invalid/schemas/v1/native/results.schema.json#/$defs/GetVersionResult",
+  "description": "getVersion = protocol negotiation result.",
+  "valid": [
+    {
+      "name": "host 0.2.0",
+      "data": {
+        "applicationVersion": "0.2.0",
+        "supportedProtocolVersions": [
+          1
+        ],
+        "capabilities": [
+          "listCertificates",
+          "readCertificate",
+          "signHash"
+        ],
+        "platform": "windows-x64"
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "no protocols",
+      "base": 0,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/supportedProtocolVersions",
+          "value": []
+        }
+      ],
+      "reason": "at least one"
+    },
+    {
+      "name": "app version used as protocol",
+      "base": 0,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/supportedProtocolVersions",
+          "value": [
+            "0.2.0"
+          ]
+        }
+      ],
+      "reason": "protocol versions are integers, distinct from the application release"
+    },
+    {
+      "name": "protocol in app version",
+      "base": 0,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/applicationVersion",
+          "value": "1"
+        }
+      ],
+      "reason": "application version is SemVer"
+    },
+    {
+      "name": "legacy field names",
+      "base": 0,
+      "patch": [
+        {
+          "op": "remove",
+          "path": "/applicationVersion"
+        },
+        {
+          "op": "add",
+          "path": "/hostVersion",
+          "value": "0.2.0"
+        }
+      ],
+      "reason": "single negotiation shape"
+    },
+    {
+      "name": "generic sign capability",
+      "base": 0,
+      "patch": [
+        {
+          "op": "add",
+          "path": "/capabilities/-",
+          "value": "signData"
+        }
+      ],
+      "reason": "no generic signing API"
+    },
+    {
+      "name": "linux platform",
+      "base": 0,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/platform",
+          "value": "linux-x64"
+        }
+      ],
+      "reason": "MVP is Windows only"
+    }
+  ]
+}

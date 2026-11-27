@@ -1,0 +1,32 @@
+{
+  "schema": "https://signport.invalid/schemas/v1/common.schema.json#/$defs/StorageRef",
+  "description": "Opaque storage keys, never URLs or paths.",
+  "valid": [
+    {
+      "name": "tenant scoped key",
+      "data": "tenants/01936f3c-0000-7000-8000-000000000001/documents/01936f3c-0000-7000-8000-000000000007.pdf"
+    }
+  ],
+  "invalid": [
+    {
+      "name": "absolute path",
+      "data": "/etc/passwd",
+      "reason": "absolute path"
+    },
+    {
+      "name": "traversal",
+      "data": "tenants/../secrets",
+      "reason": "dot segment"
+    },
+    {
+      "name": "url",
+      "data": "https://evil.example.invalid/doc.pdf",
+      "reason": "URL"
+    },
+    {
+      "name": "windows path",
+      "data": "C:\\docs\\a.pdf",
+      "reason": "path"
+    }
+  ]
+}

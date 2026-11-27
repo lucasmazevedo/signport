@@ -1,0 +1,41 @@
+{
+  "schema": "https://signport.invalid/schemas/v1/engine/api.schema.json#/$defs/Capabilities",
+  "description": "GET /v1/capabilities.",
+  "valid": [
+    {
+      "name": "defaults",
+      "data": {
+        "engine_version": "0.1.0",
+        "api_version": "v1",
+        "digest_algorithms": [
+          "SHA-256"
+        ],
+        "signature_algorithms": [
+          "RSA_PKCS1_V1_5"
+        ],
+        "policies": [
+          "icpbr-pades-rb"
+        ],
+        "limits": {
+          "max_pdf_bytes": 20971520,
+          "max_pdf_pages": 2000,
+          "preparation_ttl_seconds": 600
+        }
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "api v2",
+      "base": 0,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/api_version",
+          "value": "v2"
+        }
+      ],
+      "reason": "v1 contract"
+    }
+  ]
+}

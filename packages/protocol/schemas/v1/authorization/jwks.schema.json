@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://signport.invalid/schemas/v1/authorization/jwks.schema.json",
+  "title": "Local authorization JWKS v1",
+  "description": "Public keys served at GET /.well-known/jwks.json. Only EC P-256 public keys for ES256. Closed schema: private members ('d', 'p', 'q', ...) are rejected. Fetching this document does NOT establish trust in the host: the instance key must be bootstrapped through an operator-provisioned or independently confirmed fingerprint (SPEC §27.1); rotation requires a validated chain of trust or new explicit consent.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["keys"],
+  "properties": {
+    "keys": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 10,
+      "items": { "$ref": "#/$defs/EcPublicJwk" }
+    }
+  },
+  "$defs": {
+    "KeyId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9._-]+$"
+    },
+    "Base64UrlCoordinate": {
+      "description": "P-256 coordinate, 32 bytes, base64url without padding (43 characters).",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$"
+    },
+    "EcPublicJwk": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kty", "crv", "x", "y", "kid", "use", "alg"],
+      "properties": {
+        "kty": { "const": "EC" },
+        "crv": { "const": "P-256" },
+        "x": { "$ref": "#/$defs/Base64UrlCoordinate" },
+        "y": { "$ref": "#/$defs/Base64UrlCoordinate" },
+        "kid": { "$ref": "#/$defs/KeyId" },
+        "use": { "const": "sig" },
+        "alg": { "const": "ES256" }
+      }
+    }
+  }
+}

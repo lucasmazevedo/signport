@@ -32,7 +32,7 @@ O SignPort pretende reduzir a dependência de motores proprietários, tarifas po
 
 ## Como começar
 
-Leia [SPEC.md](SPEC.md) v2.3, [AGENTS.md](AGENTS.md) e [ROADMAP.md](ROADMAP.md). A primeira etapa é P0, descrita em [docs/first-agent-task.md](docs/first-agent-task.md). Ainda não há instalação executável ou Compose funcional.
+Leia [SPEC.md](SPEC.md) v2.3.1, [AGENTS.md](AGENTS.md) e [ROADMAP.md](ROADMAP.md). ROADMAP.md é a referência canônica da ordem de implementação. A primeira etapa é P0 (contratos em [packages/protocol](packages/protocol/)), descrita em [docs/first-agent-task.md](docs/first-agent-task.md). Ainda não há instalação executável ou Compose funcional.
 
 ## Segurança e governança
 

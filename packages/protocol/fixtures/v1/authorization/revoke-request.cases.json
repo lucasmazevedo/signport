@@ -1,0 +1,26 @@
+{
+  "schema": "https://signport.invalid/schemas/v1/authorization/api.schema.json#/$defs/RevokeAuthorizationRequest",
+  "description": "Revoke request.",
+  "valid": [
+    {
+      "name": "user cancelled",
+      "data": {
+        "reason": "user_cancelled"
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "free text reason",
+      "base": 0,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/reason",
+          "value": "porque sim"
+        }
+      ],
+      "reason": "enumerated reasons"
+    }
+  ]
+}

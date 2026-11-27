@@ -1,0 +1,52 @@
+{
+  "schema": "https://signport.invalid/schemas/v1/authorization/api.schema.json#/$defs/ConsumeAuthorizationRequest",
+  "description": "POST /api/v1/local/authorizations/consume request (native host).",
+  "valid": [
+    {
+      "name": "consume",
+      "data": {
+        "authorization": "eyJhbGciOiJFUzI1NiJ9.eyJzeW50aGV0aWMiOnRydWV9.c3ludGhldGljLXNpZ25hdHVyZS1ub3QtdmFsaWQ",
+        "attempt_id": "01936f3c-0000-7000-8000-000000000004",
+        "certificate_sha256": "0d3c61a18544a97916ff01682072bba0f6ca447cd04e4b64c67075795529a35c",
+        "signed_attributes_digest_b64": "//0rVG4gB7nrYwgVR0XZn5PfJlNXUS9vUn5kzLY9NAc="
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "missing echoed digest",
+      "base": 0,
+      "patch": [
+        {
+          "op": "remove",
+          "path": "/signed_attributes_digest_b64"
+        }
+      ],
+      "reason": "host echoes the command it will execute"
+    },
+    {
+      "name": "idempotency hint",
+      "base": 0,
+      "patch": [
+        {
+          "op": "add",
+          "path": "/idempotency_key",
+          "value": "abcdefabcdefabcdef"
+        }
+      ],
+      "reason": "consumption is never idempotent"
+    },
+    {
+      "name": "session token",
+      "base": 0,
+      "patch": [
+        {
+          "op": "add",
+          "path": "/session",
+          "value": "x"
+        }
+      ],
+      "reason": "JWS is the only credential"
+    }
+  ]
+}

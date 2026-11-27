@@ -1,0 +1,49 @@
+{
+  "schema": "https://signport.invalid/schemas/v1/authorization/api.schema.json#/$defs/Instance",
+  "description": "GET /api/v1/instance.",
+  "valid": [
+    {
+      "name": "instance",
+      "data": {
+        "instance_id": "01936f3c-0000-7000-8000-000000000008",
+        "issuer": "https://hub.example.invalid",
+        "name": "SignPort Teste Sintético",
+        "hub_version": "0.2.0-alpha.1",
+        "api_versions": [
+          "v1"
+        ],
+        "native_protocols": [
+          1
+        ],
+        "authorization_audience": "org.signport.nativehost",
+        "jwks_uri": "https://hub.example.invalid/.well-known/jwks.json",
+        "source_code_url": "https://source.example.invalid/signport/tree/v0.2.0-alpha.1"
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "missing source code url",
+      "base": 0,
+      "patch": [
+        {
+          "op": "remove",
+          "path": "/source_code_url"
+        }
+      ],
+      "reason": "AGPL §13 corresponding source offer"
+    },
+    {
+      "name": "http jwks",
+      "base": 0,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/jwks_uri",
+          "value": "http://hub.example.invalid/.well-known/jwks.json"
+        }
+      ],
+      "reason": "https only"
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "schema": "https://signport.invalid/schemas/v1/engine/api.schema.json#/$defs/Readiness",
+  "description": "GET /health/ready.",
+  "valid": [
+    {
+      "name": "ready",
+      "data": {
+        "status": "ready",
+        "checks": {
+          "storage": "ok",
+          "trust_bundle": "ok",
+          "state_store": "ok"
+        }
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "leaks configuration",
+      "base": 0,
+      "patch": [
+        {
+          "op": "add",
+          "path": "/checks/storage_path",
+          "value": "/var/lib/signport"
+        }
+      ],
+      "reason": "no configuration disclosure"
+    }
+  ]
+}

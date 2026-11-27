@@ -1,0 +1,40 @@
+{
+  "schema": "https://signport.invalid/schemas/v1/engine/api.schema.json#/$defs/CertificateInfo",
+  "description": "POST /v1/certificates/inspect response.",
+  "valid": [
+    {
+      "name": "rsa leaf",
+      "data": {
+        "certificate_sha256": "0d3c61a18544a97916ff01682072bba0f6ca447cd04e4b64c67075795529a35c",
+        "subject": "CN=TITULAR SINTETICO DE TESTE, O=SignPort Test",
+        "issuer": "CN=AC SINTETICA DE TESTE, O=SignPort Test",
+        "serial_number_hex": "0a1b2c3d",
+        "not_before": "2026-01-01T00:00:00Z",
+        "not_after": "2027-01-01T00:00:00Z",
+        "key": {
+          "algorithm": "RSA",
+          "size_bits": 2048
+        },
+        "key_usage": [
+          "digitalSignature",
+          "nonRepudiation"
+        ],
+        "icp_brasil_holder_cpf": "00000000000"
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "formatted CPF",
+      "base": 0,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/icp_brasil_holder_cpf",
+          "value": "000.000.000-00"
+        }
+      ],
+      "reason": "digits only"
+    }
+  ]
+}

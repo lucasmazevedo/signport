@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://signport.invalid/schemas/v1/authorization/consent-manifest.schema.json",
+  "title": "Local consent manifest v1",
+  "description": "What the native consent dialog displays (SPEC §§8.5, 27.2), produced by the Hub and carried inside the signed JWS. The extension or page can never supply or alter this text. consent_manifest_sha256 = SHA-256 over the RFC 8785 (JCS) canonical JSON of this object. No CPF, patient data or clinical content: titles must be minimized by the Hub. Protocol 1 covers a single item; batches need a new manifest version.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["manifest_version", "instance", "purpose", "signer", "document", "certificate", "item_count"],
+  "properties": {
+    "manifest_version": { "const": 1 },
+    "instance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["instance_id", "name", "origin"],
+      "properties": {
+        "instance_id": { "$ref": "../common.schema.json#/$defs/Uuid" },
+        "name": { "$ref": "../common.schema.json#/$defs/ShortText" },
+        "origin": { "$ref": "../common.schema.json#/$defs/HttpsOrigin" }
+      }
+    },
+    "purpose": { "$ref": "../common.schema.json#/$defs/ShortText" },
+    "signer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["display_name"],
+      "properties": {
+        "display_name": { "$ref": "../common.schema.json#/$defs/ShortText" }
+      }
+    },
+    "document": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "version_number", "document_sha256"],
+      "properties": {
+        "title": { "$ref": "../common.schema.json#/$defs/ShortText" },
+        "version_number": { "type": "integer", "minimum": 1, "maximum": 1000000 },
+        "document_sha256": { "$ref": "../common.schema.json#/$defs/Sha256Hex" }
+      }
+    },
+    "certificate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["subject", "certificate_sha256"],
+      "properties": {
+        "subject": { "$ref": "../common.schema.json#/$defs/DisplayText" },
+        "certificate_sha256": { "$ref": "../common.schema.json#/$defs/Sha256Hex" }
+      }
+    },
+    "item_count": { "const": 1 }
+  }
+}

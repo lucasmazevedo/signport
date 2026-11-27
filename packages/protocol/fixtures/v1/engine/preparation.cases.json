@@ -1,0 +1,65 @@
+{
+  "schema": "https://signport.invalid/schemas/v1/engine/api.schema.json#/$defs/Preparation",
+  "description": "Preparation state. Three distinct hash values.",
+  "valid": [
+    {
+      "name": "prepared",
+      "data": {
+        "preparation_id": "01936f3c-0000-7000-8000-000000000005",
+        "status": "prepared",
+        "document_version_id": "01936f3c-0000-7000-8000-000000000007",
+        "document_sha256": "93b5d4f9dd9cd6512f1857fee0ae17b5a0f5f720b2a217f8deaaa4df0b4f2f9a",
+        "byte_range_digest_b64": "JNdMGc/tNt+VOGJKyWKnwGKpAmgmVX/PU8T65xkBEjA=",
+        "signed_attributes_digest_b64": "//0rVG4gB7nrYwgVR0XZn5PfJlNXUS9vUn5kzLY9NAc=",
+        "digest_algorithm": "SHA-256",
+        "signature_algorithm": "RSA_PKCS1_V1_5",
+        "certificate_sha256": "0d3c61a18544a97916ff01682072bba0f6ca447cd04e4b64c67075795529a35c",
+        "policy": "icpbr-pades-rb",
+        "created_at": "2026-11-27T12:00:00Z",
+        "expires_at": "2026-11-27T12:10:00Z"
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "legacy digest_b64 field",
+      "base": 0,
+      "patch": [
+        {
+          "op": "remove",
+          "path": "/signed_attributes_digest_b64"
+        },
+        {
+          "op": "add",
+          "path": "/digest_b64",
+          "value": "//0rVG4gB7nrYwgVR0XZn5PfJlNXUS9vUn5kzLY9NAc="
+        }
+      ],
+      "reason": "ADR-0014 explicit naming, no aliases"
+    },
+    {
+      "name": "document hash as byte range digest",
+      "base": 0,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/byte_range_digest_b64",
+          "value": "93b5d4f9dd9cd6512f1857fee0ae17b5a0f5f720b2a217f8deaaa4df0b4f2f9a"
+        }
+      ],
+      "reason": "digest confusion"
+    },
+    {
+      "name": "python state leaked",
+      "base": 0,
+      "patch": [
+        {
+          "op": "add",
+          "path": "/state_pickle_b64",
+          "value": "gASV"
+        }
+      ],
+      "reason": "internal state never exposed; no pickle"
+    }
+  ]
+}

@@ -1,0 +1,209 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://signport.invalid/schemas/v1/errors.schema.json",
+  "title": "SignPort error objects v1",
+  "description": "Error objects. Code lists mirror errors/registry.json (enforced by contract tests). Messages are for humans, must not contain stack traces, PIN, tokens, JWS, CPF or clinical content.",
+  "$defs": {
+    "ErrorCode": {
+      "type": "string",
+      "enum": [
+        "EXTENSION_MISSING",
+        "HOST_MISSING",
+        "VERSION_UNSUPPORTED",
+        "ORIGIN_DENIED",
+        "INSTANCE_UNTRUSTED",
+        "INVALID_MESSAGE",
+        "AUTHORIZATION_INVALID",
+        "AUTHORIZATION_EXPIRED",
+        "AUTHORIZATION_REVOKED",
+        "REPLAY",
+        "AUTHORIZATION_CONSUME_FAILED",
+        "CONSENT_DECLINED",
+        "CERT_NOT_FOUND",
+        "TOKEN_REMOVED",
+        "PIN_CANCELLED",
+        "PIN_BLOCKED",
+        "DRIVER_UNAVAILABLE",
+        "UNSUPPORTED_ALGORITHM",
+        "NATIVE_DISCONNECTED",
+        "TIMEOUT",
+        "VALIDATION_FAILED",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "NOT_FOUND",
+        "CONFLICT",
+        "IDEMPOTENCY_CONFLICT",
+        "ATTEMPT_NOT_ACTIVE",
+        "CONSENT_REQUIRED",
+        "PREPARATION_EXPIRED",
+        "STORAGE_REF_INVALID",
+        "DOCUMENT_HASH_MISMATCH",
+        "DOCUMENT_INVALID",
+        "CERTIFICATE_INVALID",
+        "CERTIFICATE_MISMATCH",
+        "UNSUPPORTED_POLICY",
+        "SIGNATURE_INVALID",
+        "CMS_RESERVATION_EXCEEDED",
+        "PAYLOAD_TOO_LARGE",
+        "RATE_LIMITED",
+        "INTERNAL_ERROR",
+        "SERVICE_UNAVAILABLE"
+      ]
+    },
+    "NativeErrorCode": {
+      "type": "string",
+      "enum": [
+        "EXTENSION_MISSING",
+        "HOST_MISSING",
+        "VERSION_UNSUPPORTED",
+        "ORIGIN_DENIED",
+        "INSTANCE_UNTRUSTED",
+        "INVALID_MESSAGE",
+        "AUTHORIZATION_INVALID",
+        "AUTHORIZATION_EXPIRED",
+        "AUTHORIZATION_REVOKED",
+        "REPLAY",
+        "AUTHORIZATION_CONSUME_FAILED",
+        "CONSENT_DECLINED",
+        "CERT_NOT_FOUND",
+        "TOKEN_REMOVED",
+        "PIN_CANCELLED",
+        "PIN_BLOCKED",
+        "DRIVER_UNAVAILABLE",
+        "UNSUPPORTED_ALGORITHM",
+        "NATIVE_DISCONNECTED",
+        "TIMEOUT",
+        "INTERNAL_ERROR"
+      ]
+    },
+    "HttpErrorCode": {
+      "type": "string",
+      "enum": [
+        "VERSION_UNSUPPORTED",
+        "ORIGIN_DENIED",
+        "AUTHORIZATION_INVALID",
+        "AUTHORIZATION_EXPIRED",
+        "AUTHORIZATION_REVOKED",
+        "REPLAY",
+        "UNSUPPORTED_ALGORITHM",
+        "VALIDATION_FAILED",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "NOT_FOUND",
+        "CONFLICT",
+        "IDEMPOTENCY_CONFLICT",
+        "ATTEMPT_NOT_ACTIVE",
+        "CONSENT_REQUIRED",
+        "PREPARATION_EXPIRED",
+        "STORAGE_REF_INVALID",
+        "DOCUMENT_HASH_MISMATCH",
+        "DOCUMENT_INVALID",
+        "CERTIFICATE_INVALID",
+        "CERTIFICATE_MISMATCH",
+        "UNSUPPORTED_POLICY",
+        "SIGNATURE_INVALID",
+        "CMS_RESERVATION_EXCEEDED",
+        "PAYLOAD_TOO_LARGE",
+        "RATE_LIMITED",
+        "INTERNAL_ERROR",
+        "SERVICE_UNAVAILABLE"
+      ]
+    },
+    "NativeError": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "message",
+        "retryable"
+      ],
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/NativeErrorCode"
+        },
+        "message": {
+          "$ref": "common.schema.json#/$defs/DisplayText"
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "supportedProtocolVersions": {
+          "description": "Only with VERSION_UNSUPPORTED: protocol versions supported by the emitter, so incompatibility is diagnosable.",
+          "$ref": "native/results.schema.json#/$defs/ProtocolVersionList"
+        }
+      },
+      "if": {
+        "properties": {
+          "code": {
+            "const": "VERSION_UNSUPPORTED"
+          }
+        },
+        "required": [
+          "code"
+        ]
+      },
+      "then": {
+        "required": [
+          "supportedProtocolVersions"
+        ]
+      },
+      "else": {
+        "not": {
+          "required": [
+            "supportedProtocolVersions"
+          ]
+        }
+      }
+    },
+    "FieldError": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pointer",
+        "reason"
+      ],
+      "properties": {
+        "pointer": {
+          "description": "RFC 6901 JSON Pointer to the offending field.",
+          "type": "string",
+          "maxLength": 256,
+          "pattern": "^(?:/[^/]*)*$"
+        },
+        "reason": {
+          "$ref": "common.schema.json#/$defs/ShortText"
+        }
+      }
+    },
+    "HttpError": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "message",
+        "correlation_id",
+        "retryable"
+      ],
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/HttpErrorCode"
+        },
+        "message": {
+          "$ref": "common.schema.json#/$defs/DisplayText"
+        },
+        "correlation_id": {
+          "$ref": "common.schema.json#/$defs/Uuid"
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "details": {
+          "type": "array",
+          "maxItems": 50,
+          "items": {
+            "$ref": "#/$defs/FieldError"
+          }
+        }
+      }
+    }
+  }
+}

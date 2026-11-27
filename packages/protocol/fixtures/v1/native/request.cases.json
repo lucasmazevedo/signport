@@ -1,0 +1,228 @@
+{
+  "schema": "https://signport.invalid/schemas/v1/native/request.schema.json",
+  "description": "Native Messaging requests (protocol 1).",
+  "valid": [
+    {
+      "name": "signHash",
+      "data": {
+        "protocol": 1,
+        "requestId": "01936f3c-0000-7000-8000-00000000000b",
+        "action": "signHash",
+        "payload": {
+          "attemptId": "01936f3c-0000-7000-8000-000000000004",
+          "signedAttributesDigestB64": "//0rVG4gB7nrYwgVR0XZn5PfJlNXUS9vUn5kzLY9NAc=",
+          "digestAlgorithm": "SHA-256",
+          "signatureAlgorithm": "RSA_PKCS1_V1_5",
+          "certificateSha256": "0d3c61a18544a97916ff01682072bba0f6ca447cd04e4b64c67075795529a35c",
+          "authorization": "eyJhbGciOiJFUzI1NiJ9.eyJzeW50aGV0aWMiOnRydWV9.c3ludGhldGljLXNpZ25hdHVyZS1ub3QtdmFsaWQ"
+        }
+      }
+    },
+    {
+      "name": "getVersion",
+      "data": {
+        "protocol": 1,
+        "requestId": "01936f3c-0000-7000-8000-00000000000b",
+        "action": "getVersion",
+        "payload": {}
+      }
+    },
+    {
+      "name": "getCapabilities",
+      "data": {
+        "protocol": 1,
+        "requestId": "01936f3c-0000-7000-8000-00000000000b",
+        "action": "getCapabilities",
+        "payload": {}
+      }
+    },
+    {
+      "name": "listCertificates default",
+      "data": {
+        "protocol": 1,
+        "requestId": "01936f3c-0000-7000-8000-00000000000b",
+        "action": "listCertificates",
+        "payload": {}
+      }
+    },
+    {
+      "name": "listCertificates including expired",
+      "data": {
+        "protocol": 1,
+        "requestId": "01936f3c-0000-7000-8000-00000000000b",
+        "action": "listCertificates",
+        "payload": {
+          "includeExpired": true
+        }
+      }
+    },
+    {
+      "name": "readCertificate",
+      "data": {
+        "protocol": 1,
+        "requestId": "01936f3c-0000-7000-8000-00000000000b",
+        "action": "readCertificate",
+        "payload": {
+          "certificateSha256": "0d3c61a18544a97916ff01682072bba0f6ca447cd04e4b64c67075795529a35c"
+        }
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "document hash instead of CMS digest",
+      "base": 0,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/payload/signedAttributesDigestB64",
+          "value": "93b5d4f9dd9cd6512f1857fee0ae17b5a0f5f720b2a217f8deaaa4df0b4f2f9a"
+        }
+      ],
+      "reason": "PDF hash is not the signature input"
+    },
+    {
+      "name": "missing authorization",
+      "base": 0,
+      "patch": [
+        {
+          "op": "remove",
+          "path": "/payload/authorization"
+        }
+      ],
+      "reason": "signHash always requires a JWS"
+    },
+    {
+      "name": "unknown action",
+      "base": 1,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/action",
+          "value": "exportPrivateKey"
+        }
+      ],
+      "reason": "deny unknown commands"
+    },
+    {
+      "name": "signBatch reserved",
+      "base": 1,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/action",
+          "value": "signBatch"
+        }
+      ],
+      "reason": "not part of protocol 1"
+    },
+    {
+      "name": "protocol 2",
+      "base": 1,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/protocol",
+          "value": 2
+        }
+      ],
+      "reason": "unsupported protocol"
+    },
+    {
+      "name": "extra envelope field",
+      "base": 1,
+      "patch": [
+        {
+          "op": "add",
+          "path": "/pin",
+          "value": "1234"
+        }
+      ],
+      "reason": "closed schema; PIN never travels in messages"
+    },
+    {
+      "name": "extra payload field",
+      "base": 0,
+      "patch": [
+        {
+          "op": "add",
+          "path": "/payload/pin",
+          "value": "1234"
+        }
+      ],
+      "reason": "closed schema"
+    },
+    {
+      "name": "page-supplied purpose text",
+      "base": 0,
+      "patch": [
+        {
+          "op": "add",
+          "path": "/payload/purpose",
+          "value": "Assinar tudo"
+        }
+      ],
+      "reason": "consent text only from the signed manifest"
+    },
+    {
+      "name": "payload on getVersion",
+      "base": 1,
+      "patch": [
+        {
+          "op": "add",
+          "path": "/payload/x",
+          "value": 1
+        }
+      ],
+      "reason": "empty payload required"
+    },
+    {
+      "name": "PKCS#11 module path from page",
+      "base": 4,
+      "patch": [
+        {
+          "op": "add",
+          "path": "/payload/pkcs11Module",
+          "value": "C:\\evil.dll"
+        }
+      ],
+      "reason": "modules never selected by the site"
+    },
+    {
+      "name": "unsupported algorithm",
+      "base": 0,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/payload/signatureAlgorithm",
+          "value": "RSA_PSS"
+        }
+      ],
+      "reason": "algorithm allowlist"
+    },
+    {
+      "name": "uppercase request id",
+      "base": 1,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/requestId",
+          "value": "01936F3C-0000-7000-8000-00000000000B"
+        }
+      ],
+      "reason": "canonical lowercase UUID"
+    },
+    {
+      "name": "PDF content in message",
+      "base": 0,
+      "patch": [
+        {
+          "op": "add",
+          "path": "/payload/pdfB64",
+          "value": "JVBERi0xLjcK"
+        }
+      ],
+      "reason": "PDFs never cross Native Messaging"
+    }
+  ]
+}

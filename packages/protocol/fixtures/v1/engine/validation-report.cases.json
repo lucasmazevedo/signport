@@ -1,0 +1,104 @@
+{
+  "schema": "https://signport.invalid/schemas/v1/engine/api.schema.json#/$defs/ValidationReport",
+  "description": "Validation report. Revocation unavailable => indeterminate.",
+  "valid": [
+    {
+      "name": "indeterminate revocation",
+      "data": {
+        "validation_id": "01936f3c-0000-7000-8000-00000000000c",
+        "status": "completed",
+        "artifact_sha256": "8dd6df18f39390a986871f41f0f834c9642375d9b6d043fe4ff450bdb7095609",
+        "policy": "icpbr-pades-rb",
+        "decision": "indeterminate",
+        "signatures": [
+          {
+            "field_name": "Signature1",
+            "signer_certificate_sha256": "0d3c61a18544a97916ff01682072bba0f6ca447cd04e4b64c67075795529a35c",
+            "decision": "indeterminate",
+            "checks": {
+              "integrity": {
+                "status": "passed"
+              },
+              "coverage": {
+                "status": "passed"
+              },
+              "chain": {
+                "status": "passed"
+              },
+              "validity_period": {
+                "status": "passed"
+              },
+              "revocation": {
+                "status": "indeterminate",
+                "code": "REVOCATION_SOURCE_UNAVAILABLE"
+              },
+              "key_usage": {
+                "status": "passed"
+              },
+              "policy": {
+                "status": "passed"
+              },
+              "timestamp": {
+                "status": "not_applicable"
+              },
+              "modifications": {
+                "status": "passed"
+              }
+            }
+          }
+        ],
+        "trust_bundle_version": "synthetic-2026.11",
+        "checked_at": "2026-11-27T12:00:00Z"
+      }
+    },
+    {
+      "name": "pending",
+      "data": {
+        "validation_id": "01936f3c-0000-7000-8000-00000000000c",
+        "status": "pending",
+        "artifact_sha256": "8dd6df18f39390a986871f41f0f834c9642375d9b6d043fe4ff450bdb7095609",
+        "decision": null,
+        "signatures": [],
+        "trust_bundle_version": "synthetic-2026.11",
+        "checked_at": null
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "boolean valid flag",
+      "base": 0,
+      "patch": [
+        {
+          "op": "add",
+          "path": "/valid",
+          "value": true
+        }
+      ],
+      "reason": "separate dimensions and decision only"
+    },
+    {
+      "name": "unknown check status",
+      "base": 0,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/signatures/0/checks/revocation/status",
+          "value": "assumed_good"
+        }
+      ],
+      "reason": "network failure is not good"
+    },
+    {
+      "name": "missing revocation dimension",
+      "base": 0,
+      "patch": [
+        {
+          "op": "remove",
+          "path": "/signatures/0/checks/revocation"
+        }
+      ],
+      "reason": "all dimensions required"
+    }
+  ]
+}

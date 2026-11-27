@@ -1,7 +1,7 @@
 # AGENTS.md — regras obrigatórias para agentes e colaboradores
 
 ## Fonte de verdade
-Leia SPEC.md (v2.3), ROADMAP.md e o AGENTS.md mais próximo da área alterada. Se houver conflito, regras de segurança prevalecem; consulte os ADRs da seção 26 e as seções 22–24 e 27–29. Não altere decisões aprovadas sem registrar proposta de ADR e obter aprovação humana. Use SignPort como marca e signport como identificador técnico; ADR-0012 na seção 29. Este arquivo é operacional; não substitui a especificação.
+Leia SPEC.md (v2.3.1), ROADMAP.md e o AGENTS.md mais próximo da área alterada. Se houver conflito, regras de segurança prevalecem; consulte os ADRs das seções 26, 29 e 30 (e `docs/architecture/`) e as seções 22–24 e 27–28. ROADMAP.md é a referência canônica da ordem de implementação (ADR-0013); o OpenAPI/JSON Schema em `packages/protocol` é a fonte canônica dos contratos (ADR-0007, ADR-0014). Não altere decisões aprovadas sem registrar proposta de ADR e obter aprovação humana. Use SignPort como marca e signport como identificador técnico; ADR-0012 na seção 29. Este arquivo é operacional; não substitui a especificação.
 
 ## Fluxo de trabalho
 1. Identifique requisito, componente, dependências e critérios de aceite; proponha mudanças pequenas e verificáveis.
@@ -28,4 +28,4 @@ Hub Laravel/React é fonte de verdade do workflow; Engine FastAPI/pyHanko é pri
 Requisito rastreado, código e testes revisáveis, contratos versionados, erros tratados, documentação atualizada, ausência de segredos, licença verificada, resultados de testes registrados. Gate de hardware/ITI/fornecedor permanece pendente quando não testado. Nenhum stub deve retornar sucesso falso.
 
 ## Ordem inicial
-Protocol → Engine PoC → Desktop → Extension → SDK JS → Hub → Bird ID (gate contratual) → SDK PHP → infraestrutura → beta. Não gerar toda a aplicação de uma vez. Consulte os arquivos locais para comandos após bootstrap; atualmente não existem runtimes ou lockfiles instalados.
+P0 Protocol → P1 Engine PoC → P1.5 Authorization Foundation (Hub mínimo) → P2 Desktop → P3 Extension → P4 SDK JS → P5 Hub completo → P6 Bird ID (gate contratual) → P7 SDK PHP → P8 infraestrutura/distribuição → P9 beta. Não gerar toda a aplicação de uma vez. Consulte o AGENTS.md/README de cada componente para comandos após bootstrap; somente `packages/protocol` possui runtime de desenvolvimento (Node.js + pnpm) e lockfile.

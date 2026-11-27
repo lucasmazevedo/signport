@@ -1,0 +1,33 @@
+{
+  "schema": "https://signport.invalid/schemas/v1/engine/api.schema.json#/$defs/CompletePreparationResponse",
+  "description": "Complete response.",
+  "valid": [
+    {
+      "name": "completed",
+      "data": {
+        "preparation_id": "01936f3c-0000-7000-8000-000000000005",
+        "attempt_id": "01936f3c-0000-7000-8000-000000000004",
+        "status": "completed",
+        "artifact": {
+          "artifact_ref": "tenants/01936f3c-0000-7000-8000-000000000001/artifacts/01936f3c-0000-7000-8000-000000000004.pdf",
+          "sha256": "8dd6df18f39390a986871f41f0f834c9642375d9b6d043fe4ff450bdb7095609",
+          "size_bytes": 204800
+        }
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "public url artifact",
+      "base": 0,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/artifact/artifact_ref",
+          "value": "https://cdn.example.invalid/a.pdf"
+        }
+      ],
+      "reason": "private storage refs only"
+    }
+  ]
+}

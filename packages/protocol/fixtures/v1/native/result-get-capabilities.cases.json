@@ -1,0 +1,50 @@
+{
+  "schema": "https://signport.invalid/schemas/v1/native/results.schema.json#/$defs/GetCapabilitiesResult",
+  "description": "getCapabilities result.",
+  "valid": [
+    {
+      "name": "default",
+      "data": {
+        "digestAlgorithms": [
+          "SHA-256"
+        ],
+        "signatureAlgorithms": [
+          "RSA_PKCS1_V1_5"
+        ],
+        "keyProviders": [
+          "CNG",
+          "CAPI"
+        ],
+        "maxMessageBytes": 262144
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "message limit above 256 KiB",
+      "base": 0,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/maxMessageBytes",
+          "value": 1048576
+        }
+      ],
+      "reason": "internal limit 256 KiB"
+    },
+    {
+      "name": "actions duplicated here",
+      "base": 0,
+      "patch": [
+        {
+          "op": "add",
+          "path": "/actions",
+          "value": [
+            "signHash"
+          ]
+        }
+      ],
+      "reason": "actions are reported by getVersion only"
+    }
+  ]
+}

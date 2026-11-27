@@ -1,0 +1,132 @@
+{
+  "schema": "https://signport.invalid/schemas/v1/authorization/jws-header.schema.json",
+  "description": "JWS protected headers.",
+  "valid": [
+    {
+      "name": "ES256 typed",
+      "data": {
+        "alg": "ES256",
+        "typ": "signport-local-authz+jwt",
+        "kid": "2026-11-a"
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "alg none",
+      "base": 0,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/alg",
+          "value": "none"
+        }
+      ],
+      "reason": "alg fixed"
+    },
+    {
+      "name": "HS256",
+      "base": 0,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/alg",
+          "value": "HS256"
+        }
+      ],
+      "reason": "no symmetric/confused algorithms"
+    },
+    {
+      "name": "RS256",
+      "base": 0,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/alg",
+          "value": "RS256"
+        }
+      ],
+      "reason": "alg fixed to ES256"
+    },
+    {
+      "name": "embedded jwk",
+      "base": 0,
+      "patch": [
+        {
+          "op": "add",
+          "path": "/jwk",
+          "value": {
+            "kty": "EC",
+            "crv": "P-256",
+            "x": "a",
+            "y": "b"
+          }
+        }
+      ],
+      "reason": "keys from the message are never accepted"
+    },
+    {
+      "name": "jku",
+      "base": 0,
+      "patch": [
+        {
+          "op": "add",
+          "path": "/jku",
+          "value": "https://evil.example.invalid/jwks.json"
+        }
+      ],
+      "reason": "no remote key URLs"
+    },
+    {
+      "name": "x5c",
+      "base": 0,
+      "patch": [
+        {
+          "op": "add",
+          "path": "/x5c",
+          "value": [
+            "MIIBClNZTlRIRVRJQy1OT1QtQS1SRUFMLUNFUlRJRklDQVRFLVNDSEVNQS1GSVhUVVJFLU9OTFk="
+          ]
+        }
+      ],
+      "reason": "no embedded certificates"
+    },
+    {
+      "name": "crit",
+      "base": 0,
+      "patch": [
+        {
+          "op": "add",
+          "path": "/crit",
+          "value": [
+            "exp"
+          ]
+        }
+      ],
+      "reason": "no critical extensions"
+    },
+    {
+      "name": "generic JWT type",
+      "base": 0,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/typ",
+          "value": "JWT"
+        }
+      ],
+      "reason": "explicit typing"
+    },
+    {
+      "name": "missing kid",
+      "base": 0,
+      "patch": [
+        {
+          "op": "remove",
+          "path": "/kid"
+        }
+      ],
+      "reason": "kid required"
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "schema": "https://signport.invalid/schemas/v1/common.schema.json#/$defs/HttpsOrigin",
+  "description": "Exact HTTPS origins.",
+  "valid": [
+    {
+      "name": "plain origin",
+      "data": "https://hub.example.invalid"
+    },
+    {
+      "name": "origin with port",
+      "data": "https://sign.example.invalid:8443"
+    }
+  ],
+  "invalid": [
+    {
+      "name": "http scheme",
+      "data": "http://hub.example.invalid",
+      "reason": "https only"
+    },
+    {
+      "name": "trailing slash",
+      "data": "https://hub.example.invalid/",
+      "reason": "exact origin, no path"
+    },
+    {
+      "name": "path",
+      "data": "https://hub.example.invalid/app",
+      "reason": "no path"
+    },
+    {
+      "name": "userinfo",
+      "data": "https://user@hub.example.invalid",
+      "reason": "credentials in URL"
+    },
+    {
+      "name": "wildcard",
+      "data": "https://*.example.invalid",
+      "reason": "no wildcards"
+    },
+    {
+      "name": "uppercase host",
+      "data": "https://Hub.example.invalid",
+      "reason": "must be normalized lowercase"
+    }
+  ]
+}

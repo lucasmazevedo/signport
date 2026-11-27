@@ -1,0 +1,42 @@
+{
+  "schema": "https://signport.invalid/schemas/v1/authorization/api.schema.json#/$defs/ConsumeAuthorizationResponse",
+  "description": "Consume response.",
+  "valid": [
+    {
+      "name": "consumed",
+      "data": {
+        "authorization_id": "01936f3c-0000-7000-8000-00000000000a",
+        "attempt_id": "01936f3c-0000-7000-8000-000000000004",
+        "jti": "01936f3c-0000-7000-8000-000000000009",
+        "status": "consumed",
+        "consumed_at": "2026-11-27T12:00:00Z"
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "other status",
+      "base": 0,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/status",
+          "value": "issued"
+        }
+      ],
+      "reason": "success means consumed"
+    },
+    {
+      "name": "grants session",
+      "base": 0,
+      "patch": [
+        {
+          "op": "add",
+          "path": "/access_token",
+          "value": "x"
+        }
+      ],
+      "reason": "no session or general access"
+    }
+  ]
+}

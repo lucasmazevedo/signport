@@ -1,0 +1,52 @@
+{
+  "schema": "https://signport.invalid/schemas/v1/engine/api.schema.json#/$defs/CompletePreparationRequest",
+  "description": "POST /v1/pdf/preparations/{id}/complete request.",
+  "valid": [
+    {
+      "name": "complete",
+      "data": {
+        "attempt_id": "01936f3c-0000-7000-8000-000000000004",
+        "signature_b64": "pUOZfYTxJ5g1DAm97yzbFxv0HtPkpfgIry/rDFYmMAmlQ5l9hPEnmDUMCb3vLNsXG/Qe0+Sl+AivL+sMViYwCaVDmX2E8SeYNQwJve8s2xcb9B7T5KX4CK8v6wxWJjAJpUOZfYTxJ5g1DAm97yzbFxv0HtPkpfgIry/rDFYmMAmlQ5l9hPEnmDUMCb3vLNsXG/Qe0+Sl+AivL+sMViYwCaVDmX2E8SeYNQwJve8s2xcb9B7T5KX4CK8v6wxWJjAJpUOZfYTxJ5g1DAm97yzbFxv0HtPkpfgIry/rDFYmMAmlQ5l9hPEnmDUMCb3vLNsXG/Qe0+Sl+AivL+sMViYwCQ==",
+        "signature_algorithm": "RSA_PKCS1_V1_5",
+        "certificate_sha256": "0d3c61a18544a97916ff01682072bba0f6ca447cd04e4b64c67075795529a35c"
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "missing attempt",
+      "base": 0,
+      "patch": [
+        {
+          "op": "remove",
+          "path": "/attempt_id"
+        }
+      ],
+      "reason": "idempotency per attempt"
+    },
+    {
+      "name": "digest instead of signature",
+      "base": 0,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/signature_b64",
+          "value": "//0rVG4gB7nrYwgVR0XZn5PfJlNXUS9vUn5kzLY9NAc="
+        }
+      ],
+      "reason": "raw signature required"
+    },
+    {
+      "name": "skip verification flag",
+      "base": 0,
+      "patch": [
+        {
+          "op": "add",
+          "path": "/skip_verification",
+          "value": true
+        }
+      ],
+      "reason": "verification is mandatory"
+    }
+  ]
+}

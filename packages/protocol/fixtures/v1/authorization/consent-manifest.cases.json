@@ -1,0 +1,69 @@
+{
+  "schema": "https://signport.invalid/schemas/v1/authorization/consent-manifest.schema.json",
+  "description": "Consent manifests shown by the native host.",
+  "valid": [
+    {
+      "name": "single document",
+      "data": {
+        "manifest_version": 1,
+        "instance": {
+          "instance_id": "01936f3c-0000-7000-8000-000000000008",
+          "name": "SignPort Teste Sintético",
+          "origin": "https://hub.example.invalid"
+        },
+        "purpose": "Assinatura de laudo",
+        "signer": {
+          "display_name": "Titular Sintético"
+        },
+        "document": {
+          "title": "Laudo sintético 001",
+          "version_number": 1,
+          "document_sha256": "93b5d4f9dd9cd6512f1857fee0ae17b5a0f5f720b2a217f8deaaa4df0b4f2f9a"
+        },
+        "certificate": {
+          "subject": "CN=TITULAR SINTETICO DE TESTE, O=SignPort Test",
+          "certificate_sha256": "0d3c61a18544a97916ff01682072bba0f6ca447cd04e4b64c67075795529a35c"
+        },
+        "item_count": 1
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "CPF in manifest",
+      "base": 0,
+      "patch": [
+        {
+          "op": "add",
+          "path": "/signer/cpf",
+          "value": "00000000000"
+        }
+      ],
+      "reason": "no CPF in consent manifest"
+    },
+    {
+      "name": "batch count",
+      "base": 0,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/item_count",
+          "value": 3
+        }
+      ],
+      "reason": "protocol 1 is single item"
+    },
+    {
+      "name": "http origin",
+      "base": 0,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/instance/origin",
+          "value": "http://hub.example.invalid"
+        }
+      ],
+      "reason": "https only"
+    }
+  ]
+}

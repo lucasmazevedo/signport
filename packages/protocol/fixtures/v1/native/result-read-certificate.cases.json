@@ -1,0 +1,54 @@
+{
+  "schema": "https://signport.invalid/schemas/v1/native/results.schema.json#/$defs/ReadCertificateResult",
+  "description": "readCertificate result. DER values are synthetic placeholders, not parseable certificates.",
+  "valid": [
+    {
+      "name": "with chain",
+      "data": {
+        "certificateSha256": "0d3c61a18544a97916ff01682072bba0f6ca447cd04e4b64c67075795529a35c",
+        "certificateDerB64": "MIIBClNZTlRIRVRJQy1OT1QtQS1SRUFMLUNFUlRJRklDQVRFLVNDSEVNQS1GSVhUVVJFLU9OTFk=",
+        "chainDerB64": [
+          "MIIBClNZTlRIRVRJQy1JTlRFUk1FRElBVEUtQ0EtU0NIRU1BLUZJWFRVUkUtT05MWQ=="
+        ]
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "PEM instead of DER",
+      "base": 0,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/certificateDerB64",
+          "value": "-----BEGIN CERTIFICATE-----"
+        }
+      ],
+      "reason": "DER Base64 only"
+    },
+    {
+      "name": "chain too long",
+      "base": 0,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/chainDerB64",
+          "value": [
+            "MIIBClNZTlRIRVRJQy1JTlRFUk1FRElBVEUtQ0EtU0NIRU1BLUZJWFRVUkUtT05MWQ==",
+            "MIIBClNZTlRIRVRJQy1JTlRFUk1FRElBVEUtQ0EtU0NIRU1BLUZJWFRVUkUtT05MWQ==",
+            "MIIBClNZTlRIRVRJQy1JTlRFUk1FRElBVEUtQ0EtU0NIRU1BLUZJWFRVUkUtT05MWQ==",
+            "MIIBClNZTlRIRVRJQy1JTlRFUk1FRElBVEUtQ0EtU0NIRU1BLUZJWFRVUkUtT05MWQ==",
+            "MIIBClNZTlRIRVRJQy1JTlRFUk1FRElBVEUtQ0EtU0NIRU1BLUZJWFRVUkUtT05MWQ==",
+            "MIIBClNZTlRIRVRJQy1JTlRFUk1FRElBVEUtQ0EtU0NIRU1BLUZJWFRVUkUtT05MWQ==",
+            "MIIBClNZTlRIRVRJQy1JTlRFUk1FRElBVEUtQ0EtU0NIRU1BLUZJWFRVUkUtT05MWQ==",
+            "MIIBClNZTlRIRVRJQy1JTlRFUk1FRElBVEUtQ0EtU0NIRU1BLUZJWFRVUkUtT05MWQ==",
+            "MIIBClNZTlRIRVRJQy1JTlRFUk1FRElBVEUtQ0EtU0NIRU1BLUZJWFRVUkUtT05MWQ==",
+            "MIIBClNZTlRIRVRJQy1JTlRFUk1FRElBVEUtQ0EtU0NIRU1BLUZJWFRVUkUtT05MWQ==",
+            "MIIBClNZTlRIRVRJQy1JTlRFUk1FRElBVEUtQ0EtU0NIRU1BLUZJWFRVUkUtT05MWQ=="
+          ]
+        }
+      ],
+      "reason": "max 10"
+    }
+  ]
+}

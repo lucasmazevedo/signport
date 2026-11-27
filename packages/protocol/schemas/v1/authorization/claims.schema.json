@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://signport.invalid/schemas/v1/authorization/claims.schema.json",
+  "title": "Local authorization JWS claims v1",
+  "description": "Single-use capability for exactly one signHash (SPEC §§8.5, 27.2; ADR-0013). Semantic rules not expressible in JSON Schema, mandatory for host and Hub: nbf <= now < exp with bounded clock skew; exp - iat <= configured maximum (default TTL 120 s); iss/instance_id/kid must belong to a locally trusted, non-revoked instance; origin must equal the real sender origin reported by the extension; every bound field must equal the signHash payload; consent fields must equal the top-level claims (instance, document hash, certificate); consent_manifest_sha256 must match the JCS hash of 'consent'; signed_attributes_digest_b64 is the digest of the CMS signed attributes and is never the document hash. Mandatory host order: (1) framing/size; (2) header and payload parsed with duplicate-member rejection; (3) header schema, ES256 only, 64-byte R||S; (4) kid resolved only in the local trusted store and signature verified; (5) claims schema and semantic checks above; (6) recompute consent_manifest_sha256 with an RFC 8785 implementation that passes fixtures/v1/crypto/jcs.vectors.json — BEFORE displaying consent; (7) display exactly 'consent' (the signed data), never page or extension text; (8) consume online at the Hub — a failed or ambiguous consumption (AUTHORIZATION_CONSUME_FAILED) aborts without any key access; (9) re-read the certificate, compare its fingerprint, then SignHash once. Consumption at the Hub is atomic and never idempotent.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "iss",
+    "aud",
+    "iat",
+    "nbf",
+    "exp",
+    "jti",
+    "instance_id",
+    "tenant_id",
+    "user_id",
+    "transaction_id",
+    "attempt_id",
+    "preparation_id",
+    "origin",
+    "document",
+    "certificate_sha256",
+    "signed_attributes_digest_b64",
+    "digest_algorithm",
+    "signature_algorithm",
+    "purpose",
+    "consent",
+    "consent_manifest_sha256"
+  ],
+  "properties": {
+    "iss": {
+      "description": "Hub issuer: the instance's exact HTTPS origin (see GET /api/v1/instance).",
+      "$ref": "../common.schema.json#/$defs/HttpsOrigin"
+    },
+    "aud": {
+      "const": "org.signport.nativehost"
+    },
+    "iat": {
+      "$ref": "../common.schema.json#/$defs/UnixTime"
+    },
+    "nbf": {
+      "$ref": "../common.schema.json#/$defs/UnixTime"
+    },
+    "exp": {
+      "$ref": "../common.schema.json#/$defs/UnixTime"
+    },
+    "jti": {
+      "$ref": "../common.schema.json#/$defs/Uuid"
+    },
+    "instance_id": {
+      "$ref": "../common.schema.json#/$defs/Uuid"
+    },
+    "tenant_id": {
+      "$ref": "../common.schema.json#/$defs/Uuid"
+    },
+    "user_id": {
+      "$ref": "../common.schema.json#/$defs/Uuid"
+    },
+    "transaction_id": {
+      "description": "Signing request identifier.",
+      "$ref": "../common.schema.json#/$defs/Uuid"
+    },
+    "attempt_id": {
+      "$ref": "../common.schema.json#/$defs/Uuid"
+    },
+    "preparation_id": {
+      "$ref": "../common.schema.json#/$defs/Uuid"
+    },
+    "origin": {
+      "description": "Web origin allowed to request this operation through the extension.",
+      "$ref": "../common.schema.json#/$defs/HttpsOrigin"
+    },
+    "document": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "document_id",
+        "version_id",
+        "document_sha256"
+      ],
+      "properties": {
+        "document_id": {
+          "$ref": "../common.schema.json#/$defs/Uuid"
+        },
+        "version_id": {
+          "$ref": "../common.schema.json#/$defs/Uuid"
+        },
+        "document_sha256": {
+          "description": "SHA-256 of the original, frozen PDF version (audit binding). Not signed by the key.",
+          "$ref": "../common.schema.json#/$defs/Sha256Hex"
+        }
+      }
+    },
+    "certificate_sha256": {
+      "$ref": "../common.schema.json#/$defs/Sha256Hex"
+    },
+    "signed_attributes_digest_b64": {
+      "description": "SHA-256 of the DER-encoded CMS signed attributes produced by the Engine preparation. Exact input of SignHash.",
+      "$ref": "../common.schema.json#/$defs/Sha256Base64"
+    },
+    "digest_algorithm": {
+      "$ref": "../common.schema.json#/$defs/DigestAlgorithm"
+    },
+    "signature_algorithm": {
+      "$ref": "../common.schema.json#/$defs/SignatureAlgorithm"
+    },
+    "purpose": {
+      "$ref": "../common.schema.json#/$defs/ShortText"
+    },
+    "consent": {
+      "$ref": "consent-manifest.schema.json"
+    },
+    "consent_manifest_sha256": {
+      "$ref": "../common.schema.json#/$defs/Sha256Hex"
+    }
+  }
+}

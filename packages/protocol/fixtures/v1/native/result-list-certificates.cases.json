@@ -1,0 +1,69 @@
+{
+  "schema": "https://signport.invalid/schemas/v1/native/results.schema.json#/$defs/ListCertificatesResult",
+  "description": "listCertificates result. Subjects are synthetic.",
+  "valid": [
+    {
+      "name": "one certificate",
+      "data": {
+        "certificates": [
+          {
+            "certificateSha256": "0d3c61a18544a97916ff01682072bba0f6ca447cd04e4b64c67075795529a35c",
+            "subject": "CN=TITULAR SINTETICO DE TESTE, OU=Synthetic, O=SignPort Test",
+            "issuer": "CN=AC SINTETICA DE TESTE, O=SignPort Test",
+            "serialNumberHex": "0a1b2c3d",
+            "notBefore": "2026-01-01T00:00:00Z",
+            "notAfter": "2027-01-01T00:00:00Z",
+            "keyAlgorithm": "RSA",
+            "keySizeBits": 2048,
+            "hasPrivateKey": true,
+            "eligibility": "eligible"
+          }
+        ]
+      }
+    },
+    {
+      "name": "empty store",
+      "data": {
+        "certificates": []
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "private key material",
+      "base": 0,
+      "patch": [
+        {
+          "op": "add",
+          "path": "/certificates/0/privateKeyB64",
+          "value": "MIIE"
+        }
+      ],
+      "reason": "never export private keys"
+    },
+    {
+      "name": "A1/A3 inferred field",
+      "base": 0,
+      "patch": [
+        {
+          "op": "add",
+          "path": "/certificates/0/type",
+          "value": "A3"
+        }
+      ],
+      "reason": "type is never inferred locally"
+    },
+    {
+      "name": "uppercase fingerprint",
+      "base": 0,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/certificates/0/certificateSha256",
+          "value": "0D3C61A18544A97916FF01682072BBA0F6CA447CD04E4B64C67075795529A35C"
+        }
+      ],
+      "reason": "lowercase hex"
+    }
+  ]
+}

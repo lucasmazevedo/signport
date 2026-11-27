@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://signport.invalid/schemas/v1/authorization/api.schema.json",
+  "title": "Hub Authorization Foundation API bodies v1 (P1.5)",
+  "description": "Request and response bodies for the P1.5 endpoints (ADR-0013). Binding values (tenant, user, document, certificate, digest, algorithm, origin) are always derived server-side from the attempt; clients only reference the attempt.",
+  "$defs": {
+    "AuthorizationStatusValue": {
+      "type": "string",
+      "enum": ["issued", "consumed", "expired", "revoked"]
+    },
+    "IssueAuthorizationRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["attempt_id"],
+      "properties": {
+        "attempt_id": { "$ref": "../common.schema.json#/$defs/Uuid" }
+      }
+    },
+    "IssueAuthorizationResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authorization_id", "attempt_id", "jws", "kid", "expires_at", "consent"],
+      "properties": {
+        "authorization_id": { "$ref": "../common.schema.json#/$defs/Uuid" },
+        "attempt_id": { "$ref": "../common.schema.json#/$defs/Uuid" },
+        "jws": { "$ref": "../common.schema.json#/$defs/CompactJws" },
+        "kid": { "$ref": "jwks.schema.json#/$defs/KeyId" },
+        "expires_at": { "$ref": "../common.schema.json#/$defs/Timestamp" },
+        "consent": { "$ref": "consent-manifest.schema.json" }
+      }
+    },
+    "ConsumeAuthorizationRequest": {
+      "description": "Sent by the native host after local consent and immediately before the private-key operation. The host echoes the values of the command it is about to execute; the Hub rejects any divergence from the stored authorization. Authenticated only by the single-use JWS; grants no session or general access.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authorization", "attempt_id", "certificate_sha256", "signed_attributes_digest_b64"],
+      "properties": {
+        "authorization": { "$ref": "../common.schema.json#/$defs/CompactJws" },
+        "attempt_id": { "$ref": "../common.schema.json#/$defs/Uuid" },
+        "certificate_sha256": { "$ref": "../common.schema.json#/$defs/Sha256Hex" },
+        "signed_attributes_digest_b64": { "$ref": "../common.schema.json#/$defs/Sha256Base64" }
+      }
+    },
+    "ConsumeAuthorizationResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authorization_id", "attempt_id", "jti", "status", "consumed_at"],
+      "properties": {
+        "authorization_id": { "$ref": "../common.schema.json#/$defs/Uuid" },
+        "attempt_id": { "$ref": "../common.schema.json#/$defs/Uuid" },
+        "jti": { "$ref": "../common.schema.json#/$defs/Uuid" },
+        "status": { "const": "consumed" },
+        "consumed_at": { "$ref": "../common.schema.json#/$defs/Timestamp" }
+      }
+    },
+    "RevokeAuthorizationRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reason"],
+      "properties": {
+        "reason": {
+          "type": "string",
+          "enum": ["user_cancelled", "attempt_cancelled", "superseded", "security"]
+        }
+      }
+    },
+    "AuthorizationStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authorization_id", "attempt_id", "status", "issued_at", "expires_at", "consumed_at", "revoked_at"],
+      "properties": {
+        "authorization_id": { "$ref": "../common.schema.json#/$defs/Uuid" },
+        "attempt_id": { "$ref": "../common.schema.json#/$defs/Uuid" },
+        "status": { "$ref": "#/$defs/AuthorizationStatusValue" },
+        "issued_at": { "$ref": "../common.schema.json#/$defs/Timestamp" },
+        "expires_at": { "$ref": "../common.schema.json#/$defs/Timestamp" },
+        "consumed_at": { "oneOf": [{ "$ref": "../common.schema.json#/$defs/Timestamp" }, { "type": "null" }] },
+        "revoked_at": { "oneOf": [{ "$ref": "../common.schema.json#/$defs/Timestamp" }, { "type": "null" }] }
+      }
+    },
+    "Instance": {
+      "description": "Public installation identity. Informational: it does not bootstrap trust in the native host by itself (SPEC §27.1).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "instance_id",
+        "issuer",
+        "name",
+        "hub_version",
+        "api_versions",
+        "native_protocols",
+        "authorization_audience",
+        "jwks_uri",
+        "source_code_url"
+      ],
+      "properties": {
+        "instance_id": { "$ref": "../common.schema.json#/$defs/Uuid" },
+        "issuer": { "$ref": "../common.schema.json#/$defs/HttpsOrigin" },
+        "name": { "$ref": "../common.schema.json#/$defs/ShortText" },
+        "hub_version": { "$ref": "../common.schema.json#/$defs/SemVer" },
+        "api_versions": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "enum": ["v1"] }
+        },
+        "native_protocols": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "integer", "minimum": 1, "maximum": 1000 }
+        },
+        "authorization_audience": { "const": "org.signport.nativehost" },
+        "jwks_uri": { "$ref": "../common.schema.json#/$defs/HttpsUrl" },
+        "source_code_url": {
+          "description": "Corresponding Source of the running version (AGPL-3.0 §13). Configurable by fork operators.",
+          "$ref": "../common.schema.json#/$defs/HttpsUrl"
+        }
+      }
+    }
+  }
+}

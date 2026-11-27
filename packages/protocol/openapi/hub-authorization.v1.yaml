@@ -1,0 +1,243 @@
+# SPDX-License-Identifier: Apache-2.0
+openapi: 3.1.0
+info:
+  title: SignPort Hub — Authorization Foundation API (P1.5)
+  version: 1.0.0-draft.1
+  summary: Installation identity, JWKS and single-use local signing authorizations (ADR-0013).
+  description: |
+    Contract for phase P1.5, implemented inside `apps/hub` (no separate service). P5 extends the Hub API
+    with documents, signing requests, batches, validations and webhooks in additional OpenAPI documents.
+
+    Flow (SPEC §§8.5, 27.2): authenticated user consents in the Hub → browser obtains an authorization
+    (`POST /api/v1/local/authorizations`) → extension forwards `signHash` with the JWS → host verifies the
+    JWS with a locally trusted key and shows native consent → host consumes the authorization online
+    (`POST /api/v1/local/authorizations/consume`) → only then the private-key operation runs.
+
+    Consumption is atomic and never idempotent: at most one successful consumption per `jti`, even under
+    concurrency (HUB-13). A lost or ambiguous consume response fails closed and requires reconciliation and
+    a new attempt; the host never retries automatically.
+  license:
+    name: Apache-2.0
+    identifier: Apache-2.0
+servers:
+  - url: https://hub.example.invalid
+    description: Placeholder for the installation origin.
+tags:
+  - name: identity
+    description: Public installation identity and keys.
+  - name: local-authorizations
+    description: Single-use authorizations for local signing.
+paths:
+  /.well-known/jwks.json:
+    get:
+      tags: [identity]
+      operationId: getJwks
+      summary: Public keys for local authorization JWS
+      description: Public EC P-256 keys only. Does not by itself bootstrap trust in the native host (SPEC §27.1).
+      security: []
+      responses:
+        '200':
+          description: JWKS.
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/v1/authorization/jwks.schema.json'
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /api/v1/instance:
+    get:
+      tags: [identity]
+      operationId: getInstance
+      summary: Installation identity, versions and corresponding source link
+      security: []
+      responses:
+        '200':
+          description: Instance metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/v1/authorization/api.schema.json#/$defs/Instance'
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /api/v1/local/authorizations:
+    post:
+      tags: [local-authorizations]
+      operationId: issueLocalAuthorization
+      summary: Issue a single-use authorization for an active attempt
+      description: |
+        Requires an authenticated web session (with CSRF protection) of the user bound to the attempt,
+        an active attempt with a completed Engine preparation, and recorded consent for the exact
+        document version and manifest. All bound values are derived server-side. Integration
+        credentials cannot consent on behalf of the signer.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/v1/authorization/api.schema.json#/$defs/IssueAuthorizationRequest'
+      responses:
+        '201':
+          description: Authorization issued. The JWS is a sensitive capability; never log or persist it client-side.
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/v1/authorization/api.schema.json#/$defs/IssueAuthorizationResponse'
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '410': { $ref: '#/components/responses/Gone' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /api/v1/local/authorizations/consume:
+    post:
+      tags: [local-authorizations]
+      operationId: consumeLocalAuthorization
+      summary: Atomically consume a single-use authorization (native host)
+      description: |
+        Called by the native host over HTTPS after native consent and before the cryptographic operation.
+        Authenticated solely by the JWS in the body; grants no session. The Hub verifies signature, kid,
+        claims, active attempt, tenant, consent, revocation and expiration, checks that the echoed command
+        values match, and records consumption before responding. No Idempotency-Key: a second call is REPLAY.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/v1/authorization/api.schema.json#/$defs/ConsumeAuthorizationRequest'
+      responses:
+        '200':
+          description: Consumed. The host may now perform exactly one signature.
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/v1/authorization/api.schema.json#/$defs/ConsumeAuthorizationResponse'
+        '401':
+          description: AUTHORIZATION_INVALID.
+          content:
+            application/json:
+              schema: { $ref: '../schemas/v1/errors.schema.json#/$defs/HttpError' }
+        '403':
+          description: ORIGIN_DENIED.
+          content:
+            application/json:
+              schema: { $ref: '../schemas/v1/errors.schema.json#/$defs/HttpError' }
+        '409':
+          description: REPLAY, AUTHORIZATION_REVOKED or ATTEMPT_NOT_ACTIVE.
+          content:
+            application/json:
+              schema: { $ref: '../schemas/v1/errors.schema.json#/$defs/HttpError' }
+        '410':
+          description: AUTHORIZATION_EXPIRED.
+          content:
+            application/json:
+              schema: { $ref: '../schemas/v1/errors.schema.json#/$defs/HttpError' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /api/v1/local/authorizations/{authorization_id}/revoke:
+    parameters:
+      - name: authorization_id
+        in: path
+        required: true
+        schema:
+          $ref: '../schemas/v1/common.schema.json#/$defs/Uuid'
+    post:
+      tags: [local-authorizations]
+      operationId: revokeLocalAuthorization
+      summary: Revoke an unconsumed authorization
+      description: Idempotent for an already revoked authorization. A consumed authorization cannot be revoked (CONFLICT); its result is governed by attempt reconciliation instead.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/v1/authorization/api.schema.json#/$defs/RevokeAuthorizationRequest'
+      responses:
+        '200':
+          description: Authorization status after revocation.
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/v1/authorization/api.schema.json#/$defs/AuthorizationStatus'
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: signport_session
+      description: Laravel web session cookie (Secure, HttpOnly, SameSite). Cookie name provisional.
+    csrfHeader:
+      type: apiKey
+      in: header
+      name: X-XSRF-TOKEN
+      description: CSRF token required with the session cookie.
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema:
+        type: string
+        minLength: 16
+        maxLength: 128
+        pattern: '^[A-Za-z0-9_-]+$'
+    CorrelationId:
+      name: X-Correlation-Id
+      in: header
+      required: false
+      schema:
+        $ref: '../schemas/v1/common.schema.json#/$defs/Uuid'
+  responses:
+    Unauthenticated:
+      description: UNAUTHENTICATED.
+      content:
+        application/json:
+          schema: { $ref: '../schemas/v1/errors.schema.json#/$defs/HttpError' }
+    Forbidden:
+      description: FORBIDDEN.
+      content:
+        application/json:
+          schema: { $ref: '../schemas/v1/errors.schema.json#/$defs/HttpError' }
+    NotFound:
+      description: NOT_FOUND (no cross-tenant disclosure).
+      content:
+        application/json:
+          schema: { $ref: '../schemas/v1/errors.schema.json#/$defs/HttpError' }
+    Conflict:
+      description: CONFLICT, IDEMPOTENCY_CONFLICT, ATTEMPT_NOT_ACTIVE or CONSENT_REQUIRED.
+      content:
+        application/json:
+          schema: { $ref: '../schemas/v1/errors.schema.json#/$defs/HttpError' }
+    Gone:
+      description: PREPARATION_EXPIRED.
+      content:
+        application/json:
+          schema: { $ref: '../schemas/v1/errors.schema.json#/$defs/HttpError' }
+    Unprocessable:
+      description: VALIDATION_FAILED.
+      content:
+        application/json:
+          schema: { $ref: '../schemas/v1/errors.schema.json#/$defs/HttpError' }
+    RateLimited:
+      description: RATE_LIMITED.
+      content:
+        application/json:
+          schema: { $ref: '../schemas/v1/errors.schema.json#/$defs/HttpError' }
