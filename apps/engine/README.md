@@ -2,7 +2,7 @@
 
 Licença planejada: `AGPL-3.0-or-later`. Serviço privado (SPEC §7, ADR-0014). Consulte AGENTS.md e SPEC.md na raiz.
 
-**Estado: P1 E0–E2.** Núcleo de assinatura PAdES interrompida com assinante RSA externo (`signport_engine.pdf.external_signing`): preparação incremental, digest ByteRange, atributos CMS congelados, verificação da assinatura bruta antes da montagem do CMS e finalização. Ainda **não** há estado persistente (E3), relatório de validação (E5), política ICP-Brasil (E7) nem API HTTP (E9). Não usar em produção.
+**Estado: P1 E0–E4 (E3–E4 em revisão).** Núcleo de assinatura PAdES interrompida com assinante RSA externo, agora persistente: `PreparationService` (`signport_engine.service`) prepara, guarda o estado cifrado (SQLite em WAL + filesystem privado, AES-256-GCM), finaliza com verificação completa dos vínculos criptográficos, é idempotente, seguro entre processos e recuperável após falhas. Ainda **não** há relatório de validação nem política de revogação (E5), assinaturas incrementais (E6), política ICP-Brasil (E7) nem API HTTP (E9). Não usar em produção; nenhuma conformidade normativa é declarada.
 
 ```bash
 uv sync --locked

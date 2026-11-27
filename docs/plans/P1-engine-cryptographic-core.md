@@ -1,6 +1,6 @@
 # Plano P1 — SignPort Engine Cryptographic Core
 
-Estado: **aprovado** em 27/11/2026 com requisitos complementares (§11). E0–E2 implementados na branch `feat/engine-poc` (sem commit), aguardando revisão; E3–E10 não iniciados. Base: SPEC v2.3.1, ROADMAP (P0 concluída em `d736a88`, PR #1), ADR-0003, ADR-0013, ADR-0014, contratos `packages/protocol` (279 testes).
+Estado: **aprovado** em 27/11/2026 com requisitos complementares (§§11–12). E0–E2 concluídos e mergeados (PR #2, `6539868`); E3–E10 não iniciados. Plano detalhado de E3–E6: `docs/plans/P1-E3-E6-persistence-finalization-validation.md` (aprovado em 27/11/2026; E3–E4 em implementação na `feat/engine-persistence`, E5–E6 na futura `feat/engine-validation`). Base: SPEC v2.3.1, ROADMAP (P0 concluída em `d736a88`, PR #1), ADR-0003, ADR-0013, ADR-0014, contratos `packages/protocol` (279 testes).
 
 ## 1. Objetivo e escopo
 
@@ -246,7 +246,8 @@ PRs sequenciais, cada branch criada da `main` atualizada após o merge da anteri
 | Branch | Etapas |
 |---|---|
 | `feat/engine-poc` | E0–E2 |
-| `feat/engine-persistence` | E3–E6 |
+| `feat/engine-persistence` | E3–E4 |
+| `feat/engine-validation` | E5–E6 |
 | `feat/engine-icp-brasil` | E7–E8 |
 | `feat/engine-api` | E9–E10 |
 
@@ -268,3 +269,28 @@ Commit, push e PR somente com autorização; sem co-autoria nos commits.
 - [ ] Job `engine` no GitHub Actions executado com sucesso (definido com permissões mínimas e Actions fixadas por SHA; só pode ser comprovado após push autorizado).
 
 Evidências e achados: `docs/architecture/notes/P1-E2-pyhanko-spike.md`.
+
+## 12. Requisitos da revisão do PR #2 (27/11/2026)
+
+### 12.1 Critérios obrigatórios de E3/E4
+A finalização deve, a partir do estado persistido e antes de gravar o artefato:
+- [ ] Recalcular o fingerprint SHA-256 do certificado recuperado do estado e compará-lo com o vinculado à preparação e ao pedido.
+- [ ] Validar a correspondência entre o certificado e o atributo `signingCertificateV2` (hash do certificado e `issuerSerial`).
+- [ ] Validar os algoritmos vinculados à preparação (digest e assinatura) contra o pedido e contra a política configurada.
+- [ ] Validar os offsets da região reservada (início < fim, dentro do arquivo, capacidade par e positiva, delimitadores `<` e `>`).
+- [ ] Conferir que os offsets persistidos correspondem ao `/ByteRange` efetivamente gravado no PDF preparado.
+- [ ] Recalcular o digest dos bytes cobertos pelo ByteRange a partir do PDF preparado persistido.
+- [ ] Validar que o `messageDigest` dos atributos CMS corresponde ao digest recalculado (E2 já compara com o valor persistido; E4 compara com o recalculado).
+- [ ] Garantir que nenhum byte coberto pelo ByteRange é modificado na finalização (comparação byte a byte fora da região reservada).
+- [ ] Calcular o SHA-256 do artefato final e persisti-lo junto da referência imutável.
+- [ ] Garantir atomicidade, idempotência, concorrência e recuperação após falhas.
+- [ ] Não publicar automaticamente artefatos inválidos ou indeterminados: o Engine só marca `completed`; a liberação depende do relatório de validação (E5) e da decisão do Hub.
+
+### 12.2 Avaliação: versão patch do Python no CI
+Situação atual: `.python-version` = `3.13` e uv fixado em 0.13.10. O uv resolve `3.13` contra o manifesto de downloads embutido na própria versão, então na prática obtém sempre 3.13.18 enquanto o uv não mudar. Há porém dois pontos frágeis: (a) um interpretador 3.13 do sistema no runner pode ser escolhido no lugar do gerenciado; (b) o patch muda implicitamente quando o uv é atualizado.
+
+Decisão (aprovada em 27/11/2026, implementada em `feat/engine-persistence`):
+1. Fixar `.python-version` em `3.13.18` (patch exato), mantendo `requires-python = "==3.13.*"` para que atualizações de segurança do patch sejam apenas uma alteração revisada de uma linha.
+2. No CI, `UV_PYTHON_PREFERENCE=only-managed` e `uv python install` sem argumento (lê `.python-version`), impedindo o uso do Python do runner.
+3. Teste de ambiente que compara `sys.version_info[:3]` com `.python-version`.
+4. Atualizar patch e uv juntos em PR dedicado (ou via Renovate/Dependabot quando configurados), com os mesmos checks; avisos de segurança do CPython têm prioridade sobre a data de corte `exclude-newer`.
