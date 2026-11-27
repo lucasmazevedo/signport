@@ -881,11 +881,21 @@ class SqlitePreparationRepository(NonceReservation):
             )
 
     def mark_failed(
-        self, preparation_id: str, *, token: FencingToken, reason: str, now: dt.datetime
+        self,
+        preparation_id: str,
+        *,
+        token: FencingToken,
+        reason: str,
+        deadline: dt.datetime,
+        now: dt.datetime | None = None,
     ) -> PreparationRecord:
+        """Same temporal rules as ``mark_completed`` (REV-19): time read after the write lock is
+        held, fenced by the token, refused at or after the deadline. Past the deadline the row is
+        left to the deadline path (claim/cleanup -> ``failed/expired_during_completion``)."""
         with self._tx() as conn, _db_errors():
+            now = now or self._clock.now()
             rec, prev = self._load(conn, preparation_id)
-            self._require_fence(rec, token, now)
+            self._require_fence(rec, token, now, deadline)
             return self._transition(
                 conn,
                 rec,

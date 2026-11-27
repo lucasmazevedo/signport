@@ -154,7 +154,13 @@ class PreparationRepository(NonceReservation, Protocol):
         now: dt.datetime | None = None,
     ) -> PreparationRecord: ...
     def mark_failed(
-        self, preparation_id: str, *, token: FencingToken, reason: str, now: dt.datetime
+        self,
+        preparation_id: str,
+        *,
+        token: FencingToken,
+        reason: str,
+        deadline: dt.datetime,
+        now: dt.datetime | None = None,
     ) -> PreparationRecord: ...
     def cancel(self, preparation_id: str, *, now: dt.datetime) -> PreparationRecord: ...
     def expire_due(self, *, now: dt.datetime, limit: int) -> list[str]: ...

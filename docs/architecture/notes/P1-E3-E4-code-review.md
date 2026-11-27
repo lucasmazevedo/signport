@@ -49,6 +49,18 @@ No finding was refuted.
 
 None of REV-15 to REV-19 was refuted.
 
+**Final adjustment requested at approval (REV-19, `mark_failed`):** `mark_failed()` now follows the same temporal rules as `mark_completed()`:
+- the clock is read after the write transaction is acquired;
+- the completion deadline is enforced;
+- the fencing token is still required.
+
+Past the deadline the row is not marked `cms_reservation_exceeded`. It is left to the deadline path (claim or cleanup → `failed/expired_during_completion`), and the caller still receives `CMS_RESERVATION_EXCEEDED`.
+
+Tests:
+- `rev19_mark_failed_reads_time_after_the_write_lock_and_honours_the_deadline`: write contention while time passes the deadline, both before and after it;
+- `rev19_cms_reservation_exceeded_is_reported_even_past_the_deadline`;
+- the existing `test_reservation_exceeded_fails_terminally` still passes.
+
 ## Mutation checks
 Twenty-four targeted mutations were applied one at a time to the new mechanisms. Each one ran against the full suite with `SIGNPORT_REQUIRE_OPENSSL=1`, and the sources were restored byte-for-byte afterwards (checked with `diff -r`).
 
@@ -100,5 +112,8 @@ Twenty-four targeted mutations were applied one at a time to the new mechanisms.
 | N37 | REV-19 deadline not checked at commit | Detected |
 | N38 | REV-19 claim time read before the write lock | Detected |
 | N39 | REV-18 missing counter restarts at 0 | Detected |
+| N40 | REV-19 `mark_failed` reads the time before the write lock | Detected |
+| N41 | REV-19 `mark_failed` ignores the deadline | Detected |
+| N42 | REV-19 `CMS_RESERVATION_EXCEEDED` masked by a lost fence | Detected |
 
-N25–N28 were added for the pre-publication checks and N29–N39 for REV-15 to REV-19. All 39 mutations are detected, and the sources were restored byte-for-byte after each one.
+N25–N28 were added for the pre-publication checks, N29–N39 for REV-15 to REV-19 and N40–N42 for the final `mark_failed` adjustment. All 42 mutations are detected, and the sources were restored byte-for-byte after each one.

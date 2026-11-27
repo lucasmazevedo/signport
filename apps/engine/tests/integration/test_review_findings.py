@@ -1278,3 +1278,78 @@ def test_rev19_time_is_read_after_waiting_for_the_write_lock(tmp_path: Path, pki
     blocker.close()
     t.join(30)
     assert outcome[0].kind is ClaimKind.EXPIRED
+
+
+def _claimed(env: dict[str, str], pki: LabPki, pdf: bytes, clock: FakeClock) -> tuple[str, FencingToken, Any]:
+    view = prepare(service(env, clock=clock), pki, pdf)
+    claim = repository(env, clock=clock).claim_completion(
+        view.record.preparation_id,
+        binding="b",
+        attempt_id=ATTEMPT_ID,
+        owner="A",
+        lease=dt.timedelta(hours=1),
+        deadline=view.record.expires_at + dt.timedelta(hours=2),
+    )
+    return view.record.preparation_id, claim.token, view.record
+
+
+@pytest.mark.parametrize("past_deadline", [False, True])
+def test_rev19_mark_failed_reads_time_after_the_write_lock_and_honours_the_deadline(
+    tmp_path: Path, pki: LabPki, pdf: bytes, past_deadline: bool
+) -> None:
+    env, clock = engine_env(tmp_path / "engine"), FakeClock()
+    pid, token, _ = _claimed(env, pki, pdf, clock)
+    deadline = clock.now() + dt.timedelta(seconds=30)  # tighter than the live lease
+    repo = repository(env, clock=clock)
+    result: list[Any] = []
+    blocker = sqlite3.connect(Path(env["ENGINE_DATA_DIR"]) / "engine.sqlite3", isolation_level=None)
+    blocker.execute("BEGIN IMMEDIATE")
+
+    def failer() -> None:
+        try:
+            result.append(
+                repo.mark_failed(pid, token=token, reason="cms_reservation_exceeded", deadline=deadline)
+            )
+        except EngineError as exc:
+            result.append(exc)
+
+    t = threading.Thread(target=failer)
+    t.start()
+    time.sleep(0.5)  # mark_failed is waiting for the write lock
+    clock.advance(31 if past_deadline else 29)
+    blocker.execute("COMMIT")
+    blocker.close()
+    t.join(30)
+    current = repo.get(pid)
+    if past_deadline:
+        assert isinstance(result[0], EngineError)
+        assert result[0].code is ErrorCode.CONFLICT
+        assert current.status is PreparationStatus.COMPLETING  # left to the deadline path
+    else:
+        assert current.status is PreparationStatus.FAILED
+        assert current.failure_reason == "cms_reservation_exceeded"
+    with pytest.raises(EngineError):  # the fencing token is still required
+        repo.mark_failed(pid, token=FencingToken("other", token.state_version), reason="x", deadline=deadline)
+
+
+def test_rev19_cms_reservation_exceeded_is_reported_even_past_the_deadline(
+    tmp_path: Path, pki: LabPki, pdf: bytes, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import signport_engine.service as service_module
+
+    env, clock = engine_env(tmp_path / "engine", ENGINE_COMPLETION_GRACE_SECONDS="0"), FakeClock()
+    svc = service(env, clock=clock)
+    view = prepare(svc, pki, pdf)
+
+    async def overflow_at_deadline(*_a: object, **_k: object) -> bytes:
+        clock.current = view.record.expires_at  # CMS assembly finished exactly at the deadline
+        raise EngineError(ErrorCode.CMS_RESERVATION_EXCEEDED, "simulated")
+
+    monkeypatch.setattr(service_module, "complete_external_signature", overflow_at_deadline)
+    with pytest.raises(EngineError) as err:
+        complete(svc, view, sign_view(pki.signer, view))
+    assert err.value.code is ErrorCode.CMS_RESERVATION_EXCEEDED  # semantics preserved
+    assert svc.get(view.record.preparation_id).record.status is PreparationStatus.COMPLETING
+    assert svc.cleanup()["failed_past_deadline"] == 1
+    final = svc.get(view.record.preparation_id).record
+    assert (final.status, final.failure_reason) == (PreparationStatus.FAILED, "expired_during_completion")

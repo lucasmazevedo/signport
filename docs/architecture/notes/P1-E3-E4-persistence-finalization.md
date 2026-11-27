@@ -80,6 +80,6 @@ Rules:
 3. **Durability** depends on the storage stack honouring fsync. A blob lost after a power loss reads as an integrity failure, never as success.
 4. **Remanence:** removed state may persist in the WAL until checkpoint, in backups and in storage remanence; it stays protected only by the state key (no per-preparation key is destroyed).
 5. An attacker with write access to `ENGINE_DATA_DIR` **and** the key defeats all local protections.
-6. Leases are clamped to the completion deadline, and claim and commit read the clock after acquiring the write lock (REV-19).
+6. Leases are clamped to the completion deadline. Claim, commit and `mark_failed` read the clock after acquiring the write lock, and commit and `mark_failed` refuse at or after the deadline (REV-19).
 7. A crash after the claim and before the artifact leaves the preparation retryable until its deadline; the Engine cannot finish without the signature.
 8. `completed` means "signed and cryptographically bound" only. Release requires validation (E5/E7) and the Hub.

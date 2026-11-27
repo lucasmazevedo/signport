@@ -433,9 +433,18 @@ class PreparationService:
             )
         except EngineError as exc:
             if exc.code is ErrorCode.CMS_RESERVATION_EXCEEDED:
-                self._repo.mark_failed(
-                    pid, token=token, reason="cms_reservation_exceeded", now=self._clock.now()
-                )
+                try:
+                    self._repo.mark_failed(
+                        pid,
+                        token=token,
+                        reason="cms_reservation_exceeded",
+                        deadline=record.expires_at + self._grace(),
+                    )
+                except EngineError as fence:
+                    if fence.code is not ErrorCode.CONFLICT:
+                        raise
+                    # Lease lost or deadline passed: the deadline path records the failure.
+                    # The caller still gets CMS_RESERVATION_EXCEEDED.
             raise
         verify_signed_artifact(
             prepared, region, signed, expected_signature_sha256=hashlib.sha256(signature).hexdigest()
