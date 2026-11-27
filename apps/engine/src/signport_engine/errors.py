@@ -13,6 +13,10 @@ class ErrorCode(StrEnum):
     UNSUPPORTED_ALGORITHM = "UNSUPPORTED_ALGORITHM"
     SIGNATURE_INVALID = "SIGNATURE_INVALID"
     CMS_RESERVATION_EXCEEDED = "CMS_RESERVATION_EXCEEDED"
+    NOT_FOUND = "NOT_FOUND"
+    CONFLICT = "CONFLICT"
+    PREPARATION_EXPIRED = "PREPARATION_EXPIRED"
+    SERVICE_UNAVAILABLE = "SERVICE_UNAVAILABLE"
     INTERNAL_ERROR = "INTERNAL_ERROR"
 
 
@@ -23,3 +27,15 @@ class EngineError(Exception):
         super().__init__(f"{code}: {message}")
         self.code = code
         self.message = message
+
+
+class ConfigurationError(Exception):
+    """Invalid or missing configuration. The Engine must refuse to start (fail safe)."""
+
+
+class StateIntegrityError(Exception):
+    """Persisted state failed authentication or consistency checks. Always fail closed.
+
+    Deliberately carries no detail that could help an attacker; callers map it to
+    INTERNAL_ERROR towards clients and log only identifiers.
+    """
