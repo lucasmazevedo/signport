@@ -36,8 +36,14 @@ jobs:
         with:
           node-version: '22.19.0'
           package-manager-cache: false
-      - name: Enable pnpm pinned by packageManager
-        run: corepack enable
+      # pnpm version (12.4.2) comes from packageManager in packages/protocol/package.json.
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          package_json_file: packages/protocol/package.json
+      - name: Toolchain versions
+        run: |
+          node --version
+          pnpm --version
       - run: pnpm install --frozen-lockfile
       - name: OpenAPI lint and contract tests
         run: pnpm run check
