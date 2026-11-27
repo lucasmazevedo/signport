@@ -47,3 +47,40 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: OpenAPI lint and contract tests
         run: pnpm run check
+  engine:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: apps/engine
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # uv pinned by version and by the SHA-256 of the official x86_64 Linux archive.
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        with:
+          version: '0.13.10'
+          checksum: 'bf65ac1a0af10f92c522d91ac096c7c0a39657647b155577e7836c2cbbb4526c'
+          enable-cache: false
+          working-directory: apps/engine
+      - name: Python 3.13 managed by uv
+        run: uv python install 3.13
+      - name: Toolchain versions
+        run: |
+          uv --version
+          uv run --locked python --version
+          openssl version
+      - name: Reproducible environment from uv.lock
+        run: uv sync --locked
+      - name: Ruff
+        run: |
+          uv run --locked ruff check .
+          uv run --locked ruff format --check .
+      - name: Pyright (strict)
+        run: uv run --locked pyright
+      - name: Pytest (includes OpenSSL independent verification)
+        env:
+          SIGNPORT_REQUIRE_OPENSSL: '1'
+        run: uv run --locked pytest
