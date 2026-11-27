@@ -7,6 +7,7 @@
 - [ ] Validate Bird ID terms, BYOC, costs and publication of adapter; local functionality remains independent.
 - [ ] Verify cryptographic policy, actual hardware, ITI validation evidence, privacy and threat model.
 - [ ] Test clean installation, upgrade, backup/restore, build provenance and signed releases.
+- [ ] Verify build-tool provenance beyond SHA-256 (e.g. GitHub artifact attestations for uv, pnpm and Actions) before any release; P1 E0–E2 accepted SHA-256 only.
 - [ ] Authorization Foundation (P1.5): concurrency and replay tests for single-use consumption, revocation and expiration pass in CI.
 - [ ] Validate the terms of the WiX Toolset version used for the MSI installer (Inno Setup contingency only).
 

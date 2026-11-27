@@ -1,0 +1,64 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+[project]
+name = "signport-engine"
+version = "0.1.0.dev0"
+description = "SignPort Engine: PAdES preparation, external signing completion and validation (private service)."
+readme = "README.md"
+license = "AGPL-3.0-or-later"
+requires-python = "==3.13.*"
+dependencies = [
+  "pyhanko==0.38.2",
+  "pyhanko-certvalidator==0.33.0",
+  "cryptography==50.0.2",
+  "asn1crypto==1.5.1",
+]
+
+[dependency-groups]
+dev = [
+  "pytest==9.2.0",
+  "ruff==0.17.6",
+  "pyright==1.1.414",
+  "jsonschema==4.26.0",
+  "referencing==0.37.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.13.10,<0.14"]
+build-backend = "uv_build"
+
+[tool.uv]
+# Supply-chain policy: never resolve artifacts published after this cutoff
+# (equivalent of pnpm minimumReleaseAge). Move forward deliberately, in review.
+exclude-newer = "2026-11-26T00:00:00Z"
+required-version = "==0.13.10"
+
+[tool.ruff]
+line-length = 110
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "BLE", "A", "C4", "PT", "RUF", "SIM", "TID"]
+ignore = []
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S603", "S607"]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"pickle".msg = "No pickle: preparation state must use explicit versioned formats (SPEC §5)."
+"marshal".msg = "No marshal."
+"shelve".msg = "No shelve."
+
+[tool.pyright]
+include = ["src", "tests"]
+pythonVersion = "3.13"
+typeCheckingMode = "strict"
+reportMissingTypeStubs = false
+reportUnknownMemberType = false
+reportUnknownVariableType = false
+reportUnknownArgumentType = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["-ra", "--strict-markers", "--strict-config"]
+filterwarnings = ["error"]
+markers = ["openssl: requires the openssl CLI"]

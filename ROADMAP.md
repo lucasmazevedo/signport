@@ -1,8 +1,8 @@
 # Roadmap — execution backlog
 Canonical implementation order (ADR-0013). SPEC.md §§13, 21 and 28 detail gates and releases and must follow this file. No gate is complete without recorded evidence.
 
-- [ ] P0 — Protocol: schemas, error taxonomy, native envelope, authorization contracts, OpenAPI (Engine and P1.5 Hub endpoints), fixtures and contract checks.
-- [ ] P1 — Engine PoC: synthetic certificate, external CMS digest, signed PDF, independent verification and policy report.
+- [x] P0 — Protocol: schemas, error taxonomy, native envelope, authorization contracts, OpenAPI (Engine and P1.5 Hub endpoints), fixtures and contract checks. Evidence: PR #1 merged as `d736a88` (27/11/2026), 279 contract tests, 4 CI checks green.
+- [ ] P1 — Engine PoC: synthetic certificate, external CMS digest, signed PDF, independent verification and policy report. Plan: `docs/plans/P1-engine-cryptographic-core.md` (approved 27/11/2026); E0–E2 in review.
 - [ ] P1.5 — Authorization Foundation (inside `apps/hub`, no new service): Laravel bootstrap, installation identity, JWS issuance/validation, JWKS, authorization persistence, atomic single-use online consumption, expiration, revocation, binding to preparation/digest/algorithm/certificate/user/tenant/attempt, minimal audit, concurrency and replay tests.
 - [ ] P2 — Desktop: A1/A3 Windows, consent, authorized digest, SoftHSM and real token; VALIDAR evidence.
 - [ ] P3 — Extension: Chrome/Edge, Native Messaging, multi-instance trust/revocation and security tests.
@@ -24,4 +24,4 @@ Canonical implementation order (ADR-0013). SPEC.md §§13, 21 and 28 detail gate
 | v0.9.0 | P8 + P9 |
 | v1.0.0 | All P0 gates, homologation, operations and documentation |
 
-First task: implement P0 only; then request review.
+Each phase is implemented incrementally and reviewed before the next.
