@@ -198,3 +198,23 @@ def build_lab_pki() -> LabPki:
         signer=make_end_entity(intermediate),
         other_signer=make_end_entity(intermediate, "OUTRO TITULAR SINTETICO"),
     )
+
+
+def reissue_same_key(original: Issued, issuer: Issued, cn: str = "TITULAR SINTETICO REEMITIDO") -> Issued:
+    """A distinct certificate (new serial/subject) for the SAME key pair (REV-14)."""
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(_name(cn))
+        .issuer_name(issuer.cert.subject)
+        .public_key(original.key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(original.cert.not_valid_before_utc)
+        .not_valid_after(original.cert.not_valid_after_utc)
+        .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+        .add_extension(
+            x509.KeyUsage(True, True, False, False, False, False, False, False, False), critical=True
+        )
+        .add_extension(_ski(original.key), critical=False)
+        .sign(issuer.key, hashes.SHA256())
+    )
+    return Issued(cert, original.key)
