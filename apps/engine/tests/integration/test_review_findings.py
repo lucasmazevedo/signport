@@ -499,10 +499,11 @@ def test_rev07_cleanup_concurrent_with_prepare_complete_and_recovery(
 ) -> None:
     env = engine_env(tmp_path / "engine", ENGINE_ORPHAN_GRACE_SECONDS="0")
     svc = service(env)
-    stop, q = CTX.Event(), CTX.Queue()
-    p = CTX.Process(target=workers.cleanup_loop_worker, args=(env, stop, q))
+    ready, stop, q = CTX.Event(), CTX.Event(), CTX.Queue()
+    p = CTX.Process(target=workers.cleanup_loop_worker, args=(env, ready, stop, q))
     p.start()
     try:
+        assert ready.wait(120)  # the cleanup loop is really running before the workload starts
         done = []
         for _ in range(6):
             view = prepare(svc, pki, pdf)
@@ -510,7 +511,8 @@ def test_rev07_cleanup_concurrent_with_prepare_complete_and_recovery(
             run(svc.recover_stale())
     finally:
         stop.set()
-    assert q.get(timeout=120) > 0
+    runs, errors = q.get(timeout=120)
+    assert runs >= 1, errors
     p.join(60)
     for pid in done:  # nothing referenced was ever deleted underneath
         assert svc.read_artifact(pid)

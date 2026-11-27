@@ -141,16 +141,17 @@ def stall_worker(
         out.put(("error", exc.code.value, 0))
 
 
-def cleanup_loop_worker(env: dict[str, str], stop: Event, out: Any) -> None:
+def cleanup_loop_worker(env: dict[str, str], ready: Event, stop: Event, out: Any) -> None:
     svc = open_engine(env)
-    runs = 0
+    runs, errors = 0, set[str]()
     while not stop.is_set():
         try:
             svc.cleanup()
             runs += 1
-        except EngineError:
-            pass  # busy storage under contention is acceptable; retry
-    out.put(runs)
+            ready.set()
+        except EngineError as exc:
+            errors.add(exc.code.value)  # busy storage under contention is acceptable; retry
+    out.put((runs, sorted(errors)))
 
 
 def rewrap_hold_worker(env: dict[str, str], reached: Event, resume: Event) -> None:

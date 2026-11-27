@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Explicit environment check (REV-14): the interpreter is the pinned, uv-managed CPython patch."""
 
+import os
 import platform
 import sys
 from pathlib import Path
@@ -16,10 +17,16 @@ def test_interpreter_matches_pinned_patch() -> None:
 
 
 def test_interpreter_is_uv_managed() -> None:
-    """uv-managed CPython lives in '<uv data>/python/cpython-<patch>-<platform>' (never /usr)."""
+    """uv-managed CPython lives in '<install dir>/cpython-<patch>-<platform>' (never /usr). The
+    install dir is UV_PYTHON_INSTALL_DIR when set (as setup-uv does in CI), else '<uv data>/python'."""
     pinned = (ENGINE_ROOT / ".python-version").read_text().strip()
     base = Path(sys.base_prefix).resolve()
     assert base.name.startswith(f"cpython-{pinned}-"), base
-    assert base.parent.name == "python"
-    assert "uv" in base.parts
+    assert base.parts[:2] != ("/", "usr"), base
+    install_dir = os.environ.get("UV_PYTHON_INSTALL_DIR")
+    if install_dir:
+        assert base.parent == Path(install_dir).resolve(), base
+    else:
+        assert base.parent.name == "python", base
+        assert "uv" in base.parts, base
     assert sys.prefix != sys.base_prefix  # running inside the project's virtualenv
