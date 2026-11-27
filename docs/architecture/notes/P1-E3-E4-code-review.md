@@ -38,6 +38,17 @@ No finding was refuted.
 | 5 | P0 contracts unchanged | `git diff main -- packages/` is empty |
 | 6 | Residual risks are not presented as resolved properties | Reviewed: REV-02, REV-04, REV-06, REV-08, REV-10 and REV-11 list their limits; REV-04 stays "Documented (risk accepted)" |
 
+## Targeted review of the published code (REV-15 … REV-19, head `0361242`)
+| ID | Verdict | Evidence in the reviewed code | Fix | Tests | State | Residual risk |
+|---|---|---|---|---|---|---|
+| REV-15 Historic registry authentication | Confirmed | `_registry_mac` used the subkey of the registered key itself, so a retired entry became unverifiable once its material left the keyring. `sync_key_registry` only checked entries of configured keys, and `registered_keys()` returned unauthenticated rows | Authenticated **key catalog** in `engine_meta`, MACed by the active key's metadata subkey. It lists every registry entry (retired ones included) and every nonce counter row, together with the installation id, an authenticated **generation** and the active key id. It is rewritten (re-authenticated) on every registry change and verified on every read; any row added, removed or altered in isolation fails closed. A missing catalog is accepted only for an empty data directory. `registered_keys()` / `registry_state()` return verified data only. Per-entry MACs remain as defence in depth | `rev15_history_stays_authenticated_after_the_old_material_is_gone`, `rev15_isolated_tampering_with_retired_history_fails_closed` (7 variants, with k1's material removed: retired flag cleared, date altered, counter row deleted, entry deleted, entry injected, generation altered, catalog deleted; both restart and running process), `rev15_catalog_generation_in_the_initial_state` | Resolved | A **coordinated** rollback of the catalog together with the rows it lists is not detected (accepted, REV-04) |
+| REV-16 Outdated keyring during maintenance | Confirmed | `rewrap`, `retire_key` and `recover_after_restore` took the exclusive lock directly, without the freshness check of `_shared` | One `_require_current()` used by both `_shared()` and `_exclusive()`. Every normal and maintenance operation is refused (`SERVICE_UNAVAILABLE`) when the authenticated generation or active key differs from the one the process started with, or when the catalog is authenticated by a key the process lacks. Reserved in-memory nonce blocks are discarded. The process that performs a retirement adopts the new generation | `rev10_processes_with_an_outdated_keyring_stop_sealing` (extended: prepare, cleanup, rewrap, retire_key, recover_after_restore before and after retirement), `rev16_same_keyring_processes_must_restart_after_maintenance` (peer with the identical keyring) | Resolved | After any registry change, every other process must restart (documented in `apps/engine/AGENTS.md`) |
+| REV-17 Registry mutation under the shared lock | Confirmed | `open_engine` ran `sync_key_registry`, which can insert keys, under the shared lock | Split into `verify_key_registry()` (read-only, under the shared lock) and `sync_key_registry()` (mutation, under the **exclusive** lock, only when needed). New keys, active-key changes and retirement happen only under exclusion and bump the generation. Staleness is detected through the generation and active key, independently of the set of key ids | `rev17_registry_cannot_change_during_a_protected_operation` (child process paused inside `complete()` holding the shared lock; a rotating startup times out with `SERVICE_UNAVAILABLE`; the registry state is identical; after the child finishes, the rotation goes through with generation + 1), `rev17_startup_with_an_unchanged_registry_is_read_only` | Resolved | The lock is local and advisory (single host) |
+| REV-18 Counter removal | Confirmed | `reserve_nonce_block` started at 0 when the row was missing, so deleting a used counter would restart the sequence | Counter rows for every envelope purpose are created at 0 in the same transaction that registers the key. A missing row is an integrity failure, and the catalog lists every counter row, so deletion is detected at startup and on every operation. `nonce_key_ids()` now means "ever reserved" (`next_counter > 0`) | `rev18_counters_exist_from_key_registration`, `rev18_deleting_a_used_counter_never_restarts_the_sequence` (direct reservation, process restart, running process with a warm block) | Resolved | Replaying an **older authenticated** counter row (or a coordinated restore) can rewind it; no protection is claimed, and the restore procedure rotates to a never-used key |
+| REV-19 Completion deadline | Confirmed | `_require_fence` checked the lease only; a lease taken shortly before the deadline could outlive it. `now` was captured before waiting for the write lock (claim, commit) and once per recovery batch | The lease is clamped to the deadline at claim and takeover. `mark_completed` requires `now < deadline` explicitly. Claim and commit read the clock **after** acquiring the write lock (the repository has an injectable clock). Recovery reads the time per row | `rev19_lease_never_outlives_the_deadline`, `rev19_commit_is_refused_at_the_deadline_even_with_a_live_lease` (deadline − 1 s accepted, deadline refused), `rev19_time_is_read_after_waiting_for_the_write_lock` (claim blocked by a writer while time passes `expires_at` → `EXPIRED`) | Resolved | Same-host clock assumption (REV-06) |
+
+None of REV-15 to REV-19 was refuted.
+
 ## Mutation checks
 Twenty-four targeted mutations were applied one at a time to the new mechanisms. Each one ran against the full suite with `SIGNPORT_REQUIRE_OPENSSL=1`, and the sources were restored byte-for-byte afterwards (checked with `diff -r`).
 
@@ -78,4 +89,16 @@ Twenty-four targeted mutations were applied one at a time to the new mechanisms.
 | N27 | Outdated keyring: keys registered elsewhere ignored | Detected |
 | N28 | Startup registry sync outside the lock | Detected |
 
-N25–N28 were added for the pre-publication checks. All 28 mutations are detected.
+| N29 | REV-15 catalog entries not compared | Detected |
+| N30 | REV-15/18 catalog counter rows not compared | Detected |
+| N31 | REV-15 catalog MAC not verified | Detected |
+| N32 | REV-15 missing catalog accepted | Detected |
+| N33 | REV-17 generation not compared | Detected |
+| N34 | REV-16 maintenance skips the freshness check | Detected |
+| N35 | REV-17 registry mutated under the shared lock | Detected |
+| N36 | REV-19 lease not clamped to the deadline | Detected |
+| N37 | REV-19 deadline not checked at commit | Detected |
+| N38 | REV-19 claim time read before the write lock | Detected |
+| N39 | REV-18 missing counter restarts at 0 | Detected |
+
+N25–N28 were added for the pre-publication checks and N29–N39 for REV-15 to REV-19. All 39 mutations are detected, and the sources were restored byte-for-byte after each one.

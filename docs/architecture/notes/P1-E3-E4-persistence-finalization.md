@@ -16,7 +16,7 @@ Date: 27/11/2026 (revised after the code review, `P1-E3-E4-code-review.md`). Sco
 | `state/model.py` | Explicit versioned JSON state (no pickle), pyHanko version policy |
 | `config.py`, `clock.py`, `ids.py`, `faults.py` | Settings, injectable clock, UUIDv7, fault points |
 
-## Data model (initial schema; pre-release, so still migration v1)
+## Data model (initial schema; pre-release, so still migration v1; the key catalog lives in `engine_meta`)
 - `preparations`: id, status (`prepared|completing|completed|cancelled|expired|failed`), `state_version`, document/certificate/prepared-PDF hashes, public digests (`byte_range_digest_b64`, `signed_attributes_digest_b64`), algorithms, policy, times, `state_envelope` + `state_key_id`, `prepared_blob` + `prepared_key_id`, lease, completion binding and attempt, artifact ref/sha/size/key id, `artifact_removed_at`, `terminal_at`, internal `failure_reason`, `mac_key_id`, `row_mac`.
 - `preparation_events`: append-only `(preparation_id, seq)`, transition, reason, time, `mac_key_id`, `chain_mac`.
 - `key_registry(key_id, fingerprint UNIQUE, first_seen_at, retired_at, mac)`: no secret material.
@@ -40,7 +40,13 @@ Date: 27/11/2026 (revised after the code review, `P1-E3-E4-code-review.md`). Sco
   - a retired key as the active key;
   - data that references keys missing from the keyring.
 - **Rotation:** add the new key as active and keep the old ones; run `rewrap()` (exclusive, paged, resumable, a no-op for rows already current, re-authenticates the event chains); then `retire_key(old)`. Retirement refuses while any DB reference or blob header on disk still uses the key, and history is kept.
-- **Processes with an outdated keyring:** every operation holds the shared maintenance lock and first re-reads the key registry. A process whose active key was retired elsewhere, or which sees keys registered after it started, is refused (`SERVICE_UNAVAILABLE`) until it restarts with the new keyring. It therefore never seals or authenticates with stale in-memory keys or nonce blocks. The startup registry sync also runs under the shared lock.
+- **Key catalog (REV-15):** `engine_meta.key_catalog` holds the installation id, an authenticated generation, the active key id, every registry entry (retired keys included) and every nonce counter row. It is MACed with the active key's metadata subkey and re-authenticated on every registry change, so the history stays verifiable after retired material leaves the keyring. Isolated removal, insertion or alteration fails closed; a coordinated rollback does not (accepted risk).
+- **Nonce counters (REV-18):** created at 0 together with the key; a missing row is an integrity failure, never a restart at 0.
+- **Startup (REV-17):** read-only `verify_key_registry()` under the shared lock. Only when keys must be registered or the active key changes does `sync_key_registry()` run, under the **exclusive** lock, bumping the generation.
+- **Processes with an outdated keyring (REV-16):**
+  - Every normal operation (shared lock) and every maintenance operation (exclusive lock) first re-reads the verified catalog.
+  - A process whose start-time generation or active key no longer matches is refused (`SERVICE_UNAVAILABLE`) and drops its in-memory nonce blocks. The same applies when the catalog is authenticated by a key it lacks.
+  - After any registry change, every other process must restart.
 - **After a backup restore:** rotate to a never-used key, then call `recover_after_restore()`, which invalidates every non-terminal preparation before any new encryption. Later, reconcile with the Hub.
 
 ## Finalization
@@ -74,5 +80,6 @@ Rules:
 3. **Durability** depends on the storage stack honouring fsync. A blob lost after a power loss reads as an integrity failure, never as success.
 4. **Remanence:** removed state may persist in the WAL until checkpoint, in backups and in storage remanence; it stays protected only by the state key (no per-preparation key is destroyed).
 5. An attacker with write access to `ENGINE_DATA_DIR` **and** the key defeats all local protections.
-6. A crash after the claim and before the artifact leaves the preparation retryable until its deadline; the Engine cannot finish without the signature.
-7. `completed` means "signed and cryptographically bound" only. Release requires validation (E5/E7) and the Hub.
+6. Leases are clamped to the completion deadline, and claim and commit read the clock after acquiring the write lock (REV-19).
+7. A crash after the claim and before the artifact leaves the preparation retryable until its deadline; the Engine cannot finish without the signature.
+8. `completed` means "signed and cryptographically bound" only. Release requires validation (E5/E7) and the Hub.
