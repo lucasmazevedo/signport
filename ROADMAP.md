@@ -3,7 +3,7 @@ Canonical implementation order (ADR-0013). SPEC.md §§13, 21 and 28 detail gate
 
 - [x] P0 — Protocol: schemas, error taxonomy, native envelope, authorization contracts, OpenAPI (Engine and P1.5 Hub endpoints), fixtures and contract checks. Evidence: PR #1 merged as `d736a88` (27/11/2026), 279 contract tests, 4 CI checks green.
 - [ ] P1 — Engine PoC: synthetic certificate, external CMS digest, signed PDF, independent verification and policy report. Plan: `docs/plans/P1-engine-cryptographic-core.md` (approved 27/11/2026); E0–E2 in review.
-- [ ] P1.5 — Authorization Foundation (inside `apps/hub`, no new service): Laravel bootstrap, installation identity, JWS issuance/validation, JWKS, authorization persistence, atomic single-use online consumption, expiration, revocation, binding to preparation/digest/algorithm/certificate/user/tenant/attempt, minimal audit, concurrency and replay tests.
+- [ ] P1.5 — Authorization Foundation (inside `apps/hub`, no new service): Laravel bootstrap, installation identity, JWS issuance/validation, JWKS, authorization persistence, atomic single-use online consumption, expiration, revocation, binding to preparation/digest/algorithm/certificate/user/tenant/attempt, minimal audit, concurrency and replay tests. Also evaluate external reconciliation and anchoring of Engine state in the Hub, which addresses the accepted risk of coordinated rollback (E3–E4 review, REV-02/REV-04).
 - [ ] P2 — Desktop: A1/A3 Windows, consent, authorized digest, SoftHSM and real token; VALIDAR evidence.
 - [ ] P3 — Extension: Chrome/Edge, Native Messaging, multi-instance trust/revocation and security tests.
 - [ ] P4 — SDK JS: independent browser/REST integration.

@@ -63,7 +63,7 @@ CREATE TABLE preparations (
   created_at            TEXT NOT NULL,
   expires_at            TEXT NOT NULL,
   updated_at            TEXT NOT NULL,
-  state_envelope        BLOB,                        -- AEAD; NULL após crypto-shred
+  state_envelope        BLOB,                        -- AEAD; NULL após o descarte lógico do estado sensível
   key_id                TEXT NOT NULL,
   lease_owner           TEXT,                        -- processo que finaliza
   lease_expires_at      TEXT,
@@ -106,7 +106,7 @@ CREATE TABLE key_usage (key_id TEXT PRIMARY KEY, encryptions INTEGER NOT NULL) S
 ### 4.3 Rotação
 - A chave ativa cifra; as antigas presentes no keyring só decifram.
 - Comando de manutenção `rewrap` (biblioteca, com CLI interna em E10): recifra os envelopes não terminais com a chave ativa, em transação, incrementando `state_version`.
-- Uma chave só pode ser retirada quando nenhuma linha a referencia (`SELECT count(*) WHERE key_id=?`); preparações terminais têm o envelope descartado (crypto-shred).
+- Uma chave só pode ser retirada quando nenhuma linha a referencia (`SELECT count(*) WHERE key_id=?`); preparações terminais têm o envelope descartado (descarte lógico do estado sensível).
 - `key_id` desconhecido → falha fechada (`INTERNAL_ERROR`, log sem detalhes).
 
 ### 4.4 Adulteração, troca de contexto e rollback
@@ -175,7 +175,7 @@ Regras:
 4. Estados terminais não ressuscitam. `cancel` só vale a partir de `prepared`; em `completing`, retorna `CONFLICT`.
 5. Ordem de gravação: o artefato vai para o filesystem (atômico, imutável) **antes** do commit `completed` com o SHA. Na recuperação, se o arquivo já existe com o SHA esperado, o Engine só completa o commit.
 6. A montagem do CMS é determinística dado o mesmo estado e a mesma assinatura. A retomada reproduz os mesmos bytes, e um teste exige SHA idêntico.
-7. Expiração e limpeza: `expire_due` move `prepared` vencidos para `expired`. A limpeza remove o PDF preparado e anula `state_envelope` (crypto-shred) dos terminais, e mantém os metadados por `ENGINE_TERMINAL_RETENTION` (padrão proposto: 7 dias) para garantir idempotência. Arquivos órfãos em `tmp/` e `artifacts/` sem linha correspondente são removidos após um período de carência.
+7. Expiração e limpeza: `expire_due` move `prepared` vencidos para `expired`. A limpeza remove o PDF preparado e anula `state_envelope` (descarte lógico do estado sensível) dos terminais, e mantém os metadados por `ENGINE_TERMINAL_RETENTION` (padrão proposto: 7 dias) para garantir idempotência. Arquivos órfãos em `tmp/` e `artifacts/` sem linha correspondente são removidos após um período de carência.
 8. O Engine **nunca** "publica": `completed` significa apenas "artefato assinado e verificado criptograficamente". A liberação depende do relatório de validação (E5) e da decisão do Hub; `indeterminate` ou `invalid` jamais liberam.
 
 ## 7. Verificações obrigatórias na finalização (requisitos do PR #2)
@@ -276,7 +276,7 @@ Mecanismo de teste: uma interface `FaultPoints`, injetada no serviço (no-op em 
 - [ ] Nonce: unicidade estatística em 10⁵ cifragens; limite de uso por chave respeitado.
 - [ ] Chave: ausente → não inicia; ambas as formas → erro; arquivo com permissão > 0600 → erro; keyring com rotação.
 - [ ] Preparar no processo A, finalizar no processo B (subprocess): PDF válido, verificado pelo OpenSSL.
-- [ ] Expiração e limpeza (crypto-shred) testadas com relógio injetado.
+- [ ] Expiração e limpeza (descarte lógico do estado sensível) testadas com relógio injetado.
 - [ ] Nenhum dado pessoal em texto claro no banco (teste busca o DER do certificado e o nome sintético nos bytes do arquivo SQLite).
 
 **E4 — Finalização**
@@ -323,7 +323,7 @@ Esta é a sugestão de um PR único E3–E6, conforme a estratégia aprovada. Se
 2. Cifrar também o PDF preparado (temporário), não só o envelope de estado.
 3. Proteção de rollback por `row_mac` + cadeia de eventos, aceitando como risco residual a restauração do banco inteiro (mitigada pelo Hub).
 4. Assinatura inválida não consome a preparação; só a válida faz o claim.
-5. Retenção padrão: preparação 10 min (SPEC §10); metadados terminais 7 dias; crypto-shred dos envelopes terminais.
+5. Retenção padrão: preparação 10 min (SPEC §10); metadados terminais 7 dias; descarte lógico dos envelopes terminais.
 6. Busca online de revogação desligada por padrão, com cliente próprio restrito contra SSRF; `aiohttp` promovido a dependência direta.
 7. Engine não certifica (DocMDP) na v1; PDFs certificados só como entrada.
 8. Python patch fixado (`3.13.18`) com `only-managed` no CI (plano P1 §12.2).
@@ -360,3 +360,14 @@ Trust stores explícitos; política estrita de revogação; busca online desliga
 
 ### 15.6 Ambiente
 `.python-version` = `3.13.18`; `UV_PYTHON_PREFERENCE=only-managed` no CI; teste explícito de ambiente.
+
+### 15.7 Revisão de código E3–E4 (REV-01 a REV-14)
+O registro completo está em `docs/architecture/notes/P1-E3-E4-code-review.md`. A terminologia *crypto-shred* foi substituída por **descarte lógico do estado sensível** (REV-11): a limpeza remove referências e arquivos cifrados, mas não destrói uma chave exclusiva por preparação, de modo que cópias em WAL, backups ou remanência do armazenamento continuam protegidas apenas pela chave de estado.
+
+### 15.8 Decisões da aprovação da revisão (27/11/2026)
+- Envelope v2 aprovado como formato interno de referência; sem migração de estados experimentais v1; versões incompatíveis continuam rejeitadas explicitamente.
+- Reserva durável de nonces em blocos aprovada.
+- `MaintenanceLock` local e consultivo aprovado para implantação em host único.
+- Risco residual de rollback coordenado de dados autenticados aceito.
+- A avaliação de mecanismos externos de reconciliação e ancoragem no Hub fica registrada na P1.5 (ROADMAP).
+- Sem novas dependências.
